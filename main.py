@@ -321,10 +321,28 @@ def render_dashboard_mode():
         flow_results = cache_loader.load_flow_hourly()
         if len(flow_results) > 0:
             st.session_state['flow_results_available'] = True
-    except:
+            st.session_state['flow_data'] = flow_results  # 탭에서 사용할 데이터
+            st.sidebar.success(f"✅ Flow: {len(flow_results)} rows loaded")
+        else:
+            st.session_state['flow_results_available'] = False
+            st.session_state['flow_data'] = None
+    except Exception as e:
         st.session_state['flow_results_available'] = False
+        st.session_state['flow_data'] = None
+        st.sidebar.warning(f"⚠️ Flow: {str(e)[:30]}")
     
-    # Sward config 로드 (metadata에서)
+    # Sward config 로드 (캐시에서)
+    try:
+        sward_config = cache_loader.load_raw_sward_config()
+        if sward_config is not None and len(sward_config) > 0:
+            st.session_state['sward_config'] = sward_config
+            st.sidebar.success(f"✅ S-Ward config: {len(sward_config)} rows")
+        else:
+            st.session_state['sward_config'] = None
+    except:
+        st.session_state['sward_config'] = None
+    
+    # Metadata에서 building 정보 로드
     try:
         metadata = cache_loader.get_metadata()
         if metadata:
