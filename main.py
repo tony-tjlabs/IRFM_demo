@@ -347,6 +347,18 @@ def render_dashboard_mode():
         "📱 MobilePhone"
     ])
     
+    # 디버그: session_state 상태 확인
+    with st.sidebar.expander("🔧 Session Debug", expanded=False):
+        st.text(f"t31_results_available: {st.session_state.get('t31_results_available', 'NOT SET')}")
+        st.text(f"t41_results_available: {st.session_state.get('t41_results_available', 'NOT SET')}")
+        st.text(f"flow_results_available: {st.session_state.get('flow_results_available', 'NOT SET')}")
+    
+    # 디버그: session_state 상태 확인
+    with st.sidebar.expander("🔧 Session Debug", expanded=False):
+        st.text(f"t31_results_available: {st.session_state.get('t31_results_available', 'NOT SET')}")
+        st.text(f"t41_results_available: {st.session_state.get('t41_results_available', 'NOT SET')}")
+        st.text(f"flow_results_available: {st.session_state.get('flow_results_available', 'NOT SET')}")
+    
     with main_tabs[0]:  # Overview
         render_dashboard_overview(cache_loader, selected_dataset)
     
