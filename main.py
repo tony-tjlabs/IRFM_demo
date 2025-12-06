@@ -213,6 +213,18 @@ def render_dashboard_mode():
     # 사용 가능한 데이터셋 찾기
     datasets = find_available_datasets()
     
+    # 디버그: 데이터셋 정보 표시
+    with st.sidebar.expander("📊 Dataset Debug", expanded=False):
+        st.text(f"Found {len(datasets)} dataset(s)")
+        for ds in datasets:
+            st.text(f"  - {ds.get('name')}: T31={ds.get('t31_records')}, T41={ds.get('t41_records')}")
+    
+    # 디버그: 데이터셋 정보 표시
+    with st.sidebar.expander("📊 Dataset Debug", expanded=False):
+        st.text(f"Found {len(datasets)} dataset(s)")
+        for ds in datasets:
+            st.text(f"  - {ds.get('name')}: T31={ds.get('t31_records')}, T41={ds.get('t41_records')}")
+    
     if not datasets:
         st.warning("⚠️ No pre-processed datasets available.")
         
