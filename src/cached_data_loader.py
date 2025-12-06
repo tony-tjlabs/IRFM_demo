@@ -441,8 +441,13 @@ def find_available_datasets(base_folder: str = None) -> List[Dict]:
         # 디버그: 사이드바에 경로 정보 표시
         debug_info = []
         for i, candidate in enumerate(path_candidates):
-            exists = candidate.exists()
-            debug_info.append(f"{i+1}. {candidate}: {'✅' if exists else '❌'}")
+            try:
+                exists = candidate.exists()
+                debug_info.append(f"{i+1}. {candidate}: {'✅' if exists else '❌'}")
+            except PermissionError:
+                debug_info.append(f"{i+1}. {candidate}: 🚫 Permission denied")
+            except Exception as e:
+                debug_info.append(f"{i+1}. {candidate}: ⚠️ {type(e).__name__}")
         
         with st.sidebar.expander("🔍 Path Debug", expanded=False):
             st.text("\n".join(debug_info))
@@ -452,36 +457,45 @@ def find_available_datasets(base_folder: str = None) -> List[Dict]:
         # 유효한 경로 찾기
         base_path = None
         for candidate in path_candidates:
-            if candidate.exists():
-                base_path = candidate
-                break
+            try:
+                if candidate.exists():
+                    base_path = candidate
+                    break
+            except (PermissionError, OSError):
+                continue
         
         if base_path is None:
             st.sidebar.warning("No valid data path found!")
             return datasets
     else:
         base_path = Path(base_folder)
-        if not base_path.exists():
+        try:
+            if not base_path.exists():
+                return datasets
+        except (PermissionError, OSError):
             return datasets
     
-    for folder in base_path.iterdir():
-        if folder.is_dir():
-            cache_folder = folder / "cache"
-            metadata_path = cache_folder / "metadata.json"
-            
-            if metadata_path.exists():
-                with open(metadata_path, 'r') as f:
-                    metadata = json.load(f)
+    try:
+        for folder in base_path.iterdir():
+            if folder.is_dir():
+                cache_folder = folder / "cache"
+                metadata_path = cache_folder / "metadata.json"
                 
-                datasets.append({
-                    'name': folder.name,
-                    'path': str(folder),
-                    'cache_path': str(cache_folder),
-                    'created_at': metadata.get('created_at', 'Unknown'),
-                    't31_records': metadata.get('t31_records', 0),
-                    't41_records': metadata.get('t41_records', 0),
-                    'flow_records': metadata.get('flow_records', 0),
-                })
+                if metadata_path.exists():
+                    with open(metadata_path, 'r') as f:
+                        metadata = json.load(f)
+                    
+                    datasets.append({
+                        'name': folder.name,
+                        'path': str(folder),
+                        'cache_path': str(cache_folder),
+                        'created_at': metadata.get('created_at', 'Unknown'),
+                        't31_records': metadata.get('t31_records', 0),
+                        't41_records': metadata.get('t41_records', 0),
+                        'flow_records': metadata.get('flow_records', 0),
+                    })
+    except (PermissionError, OSError) as e:
+        st.sidebar.error(f"Error reading datasets: {e}")
     
     return datasets
 
