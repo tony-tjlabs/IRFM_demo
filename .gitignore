@@ -1,0 +1,12 @@
+# Ignore large raw CSV data files
+Datafile/Rawdata/*/T41_*.csv
+Datafile/Rawdata/*/T31_*.csv
+Datafile/Rawdata/*/TMobile_*.csv
+Datafile/Rawdata/*/Mobile_*.csv
+*.mp4
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.streamlit/secrets.toml
+raw_*.parquet
