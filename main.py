@@ -283,12 +283,16 @@ def render_dashboard_mode():
         t31_results = cache_loader.load_t31_hourly_activity()
         if len(t31_results) > 0:
             st.session_state['t31_results_available'] = True
+            st.session_state['tward31_data'] = t31_results  # 탭에서 사용할 데이터
+            st.session_state['cache_loader'] = cache_loader  # 캐시 로더 저장
             st.sidebar.success(f"✅ T31: {len(t31_results)} rows loaded")
         else:
             st.session_state['t31_results_available'] = False
+            st.session_state['tward31_data'] = None
             st.sidebar.warning("⚠️ T31: 0 rows")
     except Exception as e:
         st.session_state['t31_results_available'] = False
+        st.session_state['tward31_data'] = None
         st.sidebar.error(f"❌ T31 error: {str(e)[:50]}")
     
     # T41 분석 결과 확인 및 로드  
@@ -296,6 +300,7 @@ def render_dashboard_mode():
         t41_results = cache_loader.load_t41_activity_analysis()
         if len(t41_results) > 0:
             st.session_state['t41_results_available'] = True
+            st.session_state['tward41_data'] = t41_results  # 탭에서 사용할 데이터
             st.session_state['type41_activity_analysis'] = t41_results
             st.sidebar.success(f"✅ T41: {len(t41_results)} rows loaded")
             # Journey Heatmap precomputed 데이터 로드
@@ -304,9 +309,11 @@ def render_dashboard_mode():
                 st.session_state['type41_journey_heatmap'] = journey_heatmap
         else:
             st.session_state['t41_results_available'] = False
+            st.session_state['tward41_data'] = None
             st.sidebar.warning("⚠️ T41: 0 rows")
     except Exception as e:
         st.session_state['t41_results_available'] = False
+        st.session_state['tward41_data'] = None
         st.sidebar.error(f"❌ T41 error: {str(e)[:50]}")
     
     # Flow 분석 결과 확인 및 로드
