@@ -329,19 +329,19 @@ def render_dashboard_mode():
         render_dashboard_overview(cache_loader, selected_dataset)
     
     with main_tabs[1]:  # T-Ward Type 31
-        if raw_data_status.get('t31', False):
+        if st.session_state.get('t31_results_available', False):
             render_dashboard_t31_tab()
         else:
             st.warning("⚠️ No T31 data available.")
     
     with main_tabs[2]:  # T-Ward Type 41
-        if raw_data_status.get('t41', False):
+        if st.session_state.get('t41_results_available', False):
             render_dashboard_t41_tab()
         else:
             st.warning("⚠️ No T41 data available.")
     
     with main_tabs[3]:  # MobilePhone
-        if raw_data_status.get('flow', False):
+        if st.session_state.get('flow_results_available', False):
             render_dashboard_mobilephone_tab()
         else:
             st.warning("⚠️ No MobilePhone(Flow) data available.")
