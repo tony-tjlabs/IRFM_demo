@@ -503,7 +503,16 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     if 'flow_data' in st.session_state and st.session_state['flow_data'] is not None:
         flow_data = st.session_state['flow_data']
         
-        if 'time' in flow_data.columns:
+        # 캐시 형식 확인 (hour, unique_devices 컬럼)
+        is_cached_flow = 'hour' in flow_data.columns and 'unique_devices' in flow_data.columns
+        
+        if is_cached_flow:
+            # 캐시 데이터: 이미 집계됨
+            hourly_avg = flow_data[['hour', 'unique_devices']].copy()
+            hourly_avg.columns = ['Hour', 'Avg Devices (2min basis)']
+            
+            st.markdown("#### 📱 MobilePhone Traffic Status")
+        elif 'time' in flow_data.columns:
             flow_data_copy = flow_data.copy()
             flow_data_copy['time'] = pd.to_datetime(flow_data_copy['time'])
             flow_data_copy['two_min_bin'] = flow_data_copy['time'].dt.floor('2min')
@@ -518,6 +527,11 @@ def render_dashboard_overview(cache_loader, selected_dataset):
             hourly_avg.columns = ['Hour', 'Avg Devices (2min basis)']
             
             st.markdown("#### 📱 MobilePhone Traffic Status")
+        else:
+            hourly_avg = None
+            
+        if hourly_avg is not None:
+            st.markdown("#### 📱 MobilePhone Traffic Status (continued)")
             col1, col2 = st.columns(2)
             with col1:
                 import matplotlib.pyplot as plt
@@ -1742,6 +1756,26 @@ def render_t31_location_analysis():
     
     t31_data = st.session_state.get('tward31_data')
     sward_config = st.session_state.get('sward_config')
+    cache_loader = st.session_state.get('cache_loader')
+    
+    # 캐시 데이터 형식 확인 (sward_id 컬럼이 없으면 캐시 형식)
+    is_cached_format = 'sward_id' not in t31_data.columns if t31_data is not None else True
+    
+    if is_cached_format:
+        st.info("📍 Location Analysis requires raw data. Showing cached location heatmaps instead.")
+        
+        # 캐시된 위치 히트맵 이미지 표시
+        if cache_loader:
+            heatmaps = cache_loader.list_location_heatmaps()
+            if heatmaps:
+                for hm in heatmaps:
+                    st.image(cache_loader.cache_folder / hm['filename'], 
+                             caption=f"{hm['building']} - {hm['level']}")
+            else:
+                st.warning("No cached location heatmaps available.")
+        else:
+            st.warning("Cache loader not available.")
+        return
     
     if t31_data is None or sward_config is None:
         st.warning("T31 data or S-Ward configuration not available.")
