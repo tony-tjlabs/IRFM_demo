@@ -271,8 +271,13 @@ def render_dashboard_mode():
         t31_results = cache_loader.load_t31_hourly_activity()
         if len(t31_results) > 0:
             st.session_state['t31_results_available'] = True
-    except:
+            st.sidebar.success(f"✅ T31: {len(t31_results)} rows loaded")
+        else:
+            st.session_state['t31_results_available'] = False
+            st.sidebar.warning("⚠️ T31: 0 rows")
+    except Exception as e:
         st.session_state['t31_results_available'] = False
+        st.sidebar.error(f"❌ T31 error: {str(e)[:50]}")
     
     # T41 분석 결과 확인 및 로드  
     try:
@@ -280,12 +285,17 @@ def render_dashboard_mode():
         if len(t41_results) > 0:
             st.session_state['t41_results_available'] = True
             st.session_state['type41_activity_analysis'] = t41_results
+            st.sidebar.success(f"✅ T41: {len(t41_results)} rows loaded")
             # Journey Heatmap precomputed 데이터 로드
             journey_heatmap = cache_loader.load_t41_journey_heatmap()
             if len(journey_heatmap) > 0:
                 st.session_state['type41_journey_heatmap'] = journey_heatmap
-    except:
+        else:
+            st.session_state['t41_results_available'] = False
+            st.sidebar.warning("⚠️ T41: 0 rows")
+    except Exception as e:
         st.session_state['t41_results_available'] = False
+        st.sidebar.error(f"❌ T41 error: {str(e)[:50]}")
     
     # Flow 분석 결과 확인 및 로드
     try:

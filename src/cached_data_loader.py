@@ -417,6 +417,7 @@ class CachedDataLoader:
 def find_available_datasets(base_folder: str = None) -> List[Dict]:
     """사용 가능한 데이터셋 (캐시 있는) 목록"""
     import os
+    import streamlit as st
     datasets = []
     
     # 여러 경로 후보 시도 (Streamlit Cloud 호환)
@@ -431,11 +432,22 @@ def find_available_datasets(base_folder: str = None) -> List[Dict]:
         cwd = Path(os.getcwd())
         path_candidates.append(cwd / "Datafile" / "Rawdata")
         
-        # 3. 환경 변수 또는 고정 경로
-        if os.environ.get('STREAMLIT_RUNTIME_ENV'):
-            # Streamlit Cloud 환경
-            path_candidates.append(Path("/mount/src/irfm_demo/Datafile/Rawdata"))
-            path_candidates.append(Path("/app/Datafile/Rawdata"))
+        # 3. Streamlit Cloud 환경 - 여러 케이스 시도
+        path_candidates.append(Path("/mount/src/irfm_demo/Datafile/Rawdata"))
+        path_candidates.append(Path("/mount/src/IRFM_demo/Datafile/Rawdata"))
+        path_candidates.append(Path("/mount/src/irfm-demo/Datafile/Rawdata"))
+        path_candidates.append(Path("/app/Datafile/Rawdata"))
+        
+        # 디버그: 사이드바에 경로 정보 표시
+        debug_info = []
+        for i, candidate in enumerate(path_candidates):
+            exists = candidate.exists()
+            debug_info.append(f"{i+1}. {candidate}: {'✅' if exists else '❌'}")
+        
+        with st.sidebar.expander("🔍 Path Debug", expanded=False):
+            st.text("\n".join(debug_info))
+            st.text(f"CWD: {os.getcwd()}")
+            st.text(f"__file__: {__file__}")
         
         # 유효한 경로 찾기
         base_path = None
@@ -445,6 +457,7 @@ def find_available_datasets(base_folder: str = None) -> List[Dict]:
                 break
         
         if base_path is None:
+            st.sidebar.warning("No valid data path found!")
             return datasets
     else:
         base_path = Path(base_folder)
@@ -471,3 +484,4 @@ def find_available_datasets(base_folder: str = None) -> List[Dict]:
                 })
     
     return datasets
+
