@@ -1542,7 +1542,18 @@ def render_t31_overview():
     # =========================================================================
     st.markdown("### 🏢 Equipment by Building & Level")
     
-    if sward_config is not None and 'building' in t31_with_loc.columns:
+    # 캐시 모드에서는 원본 데이터가 없으므로 다른 방식으로 표시
+    if is_cached_format:
+        # 캐시 모드: metadata에서 가져온 buildings 목록으로 간단히 표시
+        if buildings:
+            building_data = pd.DataFrame({
+                'Building': buildings,
+                'Status': ['Active'] * len(buildings)
+            })
+            st.dataframe(building_data, use_container_width=True)
+        else:
+            st.info("Building information not available in cached data.")
+    elif 'sward_config' in dir() and sward_config is not None and 't31_with_loc' in dir() and 'building' in t31_with_loc.columns:
         # 각 MAC이 어느 Building/Level에서 가장 많이 감지되었는지 계산
         mac_loc_counts = t31_with_loc.groupby(['mac', 'building', 'level']).size().reset_index(name='signal_count')
         
@@ -1585,7 +1596,7 @@ def render_t31_overview():
     st.markdown("### 📊 Operation Rate by Building & Level")
     st.info("**가동률** = (활성 시간 bins / 전체 시간 bins) × 100% - 24시간 중 장비가 가동된 시간 비율")
     
-    if sward_config is not None and 'building' in t31_with_loc.columns and 'time' in t31_data.columns:
+    if not is_cached_format and 'sward_config' in dir() and sward_config is not None and 't31_with_loc' in dir() and 'building' in t31_with_loc.columns and 'time' in t31_data.columns:
         t31_with_time = t31_with_loc.copy()
         t31_with_time['time'] = pd.to_datetime(t31_with_time['time'])
         t31_with_time['time_bin'] = (t31_with_time['time'].dt.hour * 6 + t31_with_time['time'].dt.minute // 10)
