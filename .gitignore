@@ -9,4 +9,6 @@ __pycache__/
 *.pyc
 .venv/
 .streamlit/secrets.toml
-raw_*.parquet
+raw_t31.parquet
+raw_t41.parquet
+raw_flow.parquet
