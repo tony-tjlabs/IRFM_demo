@@ -1933,12 +1933,41 @@ def render_t31_operation_heatmap():
         except:
             pass
     
+    # 캐시 데이터 형식 확인
+    is_cached_format = 'active_devices' in t31_data.columns
+    
     if heatmap_cache is not None:
         st.success("✅ Using precomputed heatmap data (fast)")
         _display_t31_heatmap_from_cache(heatmap_cache)
+    elif is_cached_format:
+        # 캐시 모드지만 히트맵 캐시가 없음 - 간단한 대체 표시
+        st.info("📊 Operation Heatmap - Precomputed Summary")
+        
+        # t31_results_operation_heatmap에서 간단한 요약 표시
+        if cache_loader:
+            try:
+                op_heatmap = cache_loader.load_t31_operation_heatmap()
+                if len(op_heatmap) > 0:
+                    st.write(f"**Total records:** {len(op_heatmap):,}")
+                    
+                    # Building/Level별 요약
+                    summary = op_heatmap.groupby(['building', 'level']).agg({
+                        'active_devices': 'sum',
+                        'record_count': 'sum'
+                    }).reset_index()
+                    st.dataframe(summary, use_container_width=True)
+                else:
+                    st.warning("No operation heatmap data available.")
+            except Exception as e:
+                st.warning(f"Could not load operation heatmap: {str(e)[:100]}")
+        else:
+            st.warning("Cache loader not available.")
     else:
-        # 실시간 계산 (캐시가 없거나 형식이 맞지 않음)
-        _display_t31_heatmap_realtime(t31_data, sward_config)
+        # 원본 데이터가 있으면 실시간 계산
+        if sward_config is not None:
+            _display_t31_heatmap_realtime(t31_data, sward_config)
+        else:
+            st.warning("S-Ward configuration not available for realtime heatmap.")
 
 
 def _display_building_level_legend():
