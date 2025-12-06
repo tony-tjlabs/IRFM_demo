@@ -1458,27 +1458,42 @@ def render_t31_overview():
     st.subheader("📊 T31 Overview - Equipment Status Summary")
     
     t31_data = st.session_state.get('tward31_data')
-    sward_config = st.session_state.get('sward_config')
+    cache_loader = st.session_state.get('cache_loader')
     
     if t31_data is None or t31_data.empty:
         st.warning("No T31 data available.")
         return
     
-    # Basic statistics
-    total_equipment = t31_data['mac'].nunique()
-    total_records = len(t31_data)
+    # 캐시 데이터 형식 확인 (hourly activity: date, hour, active_devices, active_swards, avg_rssi)
+    is_cached_format = 'active_devices' in t31_data.columns
     
-    # Join with sward_config for building/level info
-    if sward_config is not None:
-        t31_with_loc = t31_data.merge(
-            sward_config[['sward_id', 'building', 'level']],
-            on='sward_id',
-            how='left'
-        )
-        buildings = t31_with_loc['building'].dropna().unique().tolist()
-    else:
-        t31_with_loc = t31_data
+    if is_cached_format:
+        # 캐시 데이터: 집계된 결과 사용
+        total_equipment = int(t31_data['active_devices'].max()) if 'active_devices' in t31_data.columns else 0
+        total_records = int(t31_data['active_devices'].sum()) if 'active_devices' in t31_data.columns else len(t31_data)
+        total_swards = int(t31_data['active_swards'].max()) if 'active_swards' in t31_data.columns else 0
+        
+        # metadata에서 building 정보 가져오기
         buildings = []
+        if cache_loader:
+            metadata = cache_loader.get_metadata()
+            buildings = metadata.get('buildings', [])
+    else:
+        # 원본 데이터 형식
+        total_equipment = t31_data['mac'].nunique() if 'mac' in t31_data.columns else 0
+        total_records = len(t31_data)
+        total_swards = t31_data['sward_id'].nunique() if 'sward_id' in t31_data.columns else 0
+        
+        sward_config = st.session_state.get('sward_config')
+        if sward_config is not None:
+            t31_with_loc = t31_data.merge(
+                sward_config[['sward_id', 'building', 'level']],
+                on='sward_id',
+                how='left'
+            )
+            buildings = t31_with_loc['building'].dropna().unique().tolist()
+        else:
+            buildings = []
     
     # =========================================================================
     # Key Metrics (70% size) - 텍스트 검정색으로 명확히 표시
@@ -2173,7 +2188,7 @@ def render_t31_ai_insight_report():
     if cache_loader:
         cached_insights = cache_loader.load_ai_insights('t31')
     
-    total_equipment = t31_data['mac'].nunique()
+    total_equipment = t31_data['mac'].nunique() if 'mac' in t31_data.columns else (int(t31_data['active_devices'].max()) if 'active_devices' in t31_data.columns else 0)
     total_records = len(t31_data)
     
     if cached_insights:
