@@ -289,7 +289,7 @@ def render_dashboard_mode():
     
     # Flow 분석 결과 확인 및 로드
     try:
-        flow_results = cache_loader.load_flow_hourly_flow()
+        flow_results = cache_loader.load_flow_hourly()
         if len(flow_results) > 0:
             st.session_state['flow_results_available'] = True
     except:
