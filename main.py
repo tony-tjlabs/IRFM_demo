@@ -507,8 +507,8 @@ def render_dashboard_overview(cache_loader, selected_dataset):
         is_cached_flow = 'hour' in flow_data.columns and 'unique_devices' in flow_data.columns
         
         if is_cached_flow:
-            # 캐시 데이터: 이미 집계됨
-            hourly_avg = flow_data[['hour', 'unique_devices']].copy()
+            # 캐시 데이터: 시간대별 평균 계산 (여러 날짜가 있을 수 있음)
+            hourly_avg = flow_data.groupby('hour')['unique_devices'].mean().reset_index()
             hourly_avg.columns = ['Hour', 'Avg Devices (2min basis)']
             
             st.markdown("#### 📱 MobilePhone Traffic Status")
@@ -664,7 +664,59 @@ def _render_device_counting_tab(flow_data, sward_config):
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     
-    st.subheader("📊 Device Counting (2분 unique MAC → 10분 평균)")
+    st.subheader("📊 Device Counting (시간대별 디바이스 수)")
+    
+    # 캐시된 데이터 포맷 체크 (date, hour, unique_devices 컬럼)
+    is_cached_format = 'time' not in flow_data.columns and 'hour' in flow_data.columns
+    
+    if is_cached_format:
+        # 캐시된 집계 데이터 사용
+        st.info("📊 시간대별 집계 데이터를 표시합니다.")
+        
+        flow_hourly = flow_data.copy()
+        if 'date' in flow_hourly.columns:
+            flow_hourly['date'] = pd.to_datetime(flow_hourly['date'])
+        
+        # 시간대별 unique_devices 차트
+        hourly_stats = flow_hourly.groupby('hour')['unique_devices'].mean().reset_index()
+        hourly_stats['time_label'] = hourly_stats['hour'].apply(lambda x: f"{x:02d}:00")
+        
+        fig_total = go.Figure()
+        fig_total.add_trace(go.Scatter(
+            x=hourly_stats['time_label'],
+            y=hourly_stats['unique_devices'],
+            mode='lines+markers',
+            name='Unique Devices',
+            line=dict(color='#1f77b4', width=3),
+            marker=dict(size=8)
+        ))
+        fig_total.update_layout(
+            title='시간대별 평균 디바이스 수',
+            xaxis_title='Hour',
+            yaxis_title='Unique Devices',
+            height=350,
+            template='plotly_white'
+        )
+        st.plotly_chart(fig_total, use_container_width=True)
+        
+        # 메트릭
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("📱 Peak", f"{hourly_stats['unique_devices'].max():.0f}")
+        with col2:
+            st.metric("�� Average", f"{hourly_stats['unique_devices'].mean():.1f}")
+        with col3:
+            st.metric("📉 Min", f"{hourly_stats['unique_devices'].min():.0f}")
+        with col4:
+            st.metric("🔢 Total (Daily Avg)", f"{hourly_stats['unique_devices'].sum():.0f}")
+        
+        # 데이터 테이블
+        st.markdown("---")
+        st.markdown("### �� 시간대별 상세 데이터")
+        st.dataframe(flow_hourly, use_container_width=True)
+        return
+    
+    # 원본 데이터 로직 (time, mac, sward_id 컬럼 필요)
     st.info("**방법론**: 2분 단위로 고유 MAC 주소 수를 세고, 10분(5개 구간) 단위로 평균")
     
     # 데이터 전처리
@@ -865,8 +917,17 @@ def _render_tward_vs_mobile_tab(flow_data, sward_config):
         st.warning("T41 데이터가 없어 비교할 수 없습니다.")
         return
     
+    # 캐시 포맷 체크: building 컬럼이 이미 있으면 merge 불필요
+    is_t41_cached = 'building' in t41_data.columns and 'sward_id' not in t41_data.columns
+    is_flow_cached = 'time' not in flow_data.columns and 'hour' in flow_data.columns
+    
     # Building 목록 가져오기
-    if sward_config is not None:
+    if is_t41_cached:
+        # 캐시된 데이터: building 컬럼 이미 있음
+        t41_with_loc = t41_data.copy()
+        buildings = t41_with_loc['building'].dropna().unique().tolist()
+        buildings = sorted([b for b in buildings if str(b) != 'nan' and str(b) != 'Unknown'])
+    elif sward_config is not None and 'sward_id' in t41_data.columns:
         t41_with_loc = t41_data.merge(
             sward_config[['sward_id', 'building', 'level']],
             on='sward_id',
@@ -875,6 +936,9 @@ def _render_tward_vs_mobile_tab(flow_data, sward_config):
         buildings = t41_with_loc['building'].dropna().unique().tolist()
         buildings = sorted([b for b in buildings if str(b) != 'nan'])
     else:
+        t41_with_loc = t41_data.copy()
+        t41_with_loc['building'] = 'Unknown'
+        t41_with_loc['level'] = 'Unknown'
         buildings = []
     
     # =========================================================================
@@ -1045,9 +1109,41 @@ def _render_apple_vs_android_tab(flow_data):
     """Apple vs Android 비율 탭"""
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
-    from src.flow_analysis import identify_device_type_from_type_column
     
     st.subheader("📈 Apple vs Android Device Ratio")
+    
+    # 캐시 포맷 체크
+    is_cached_format = 'time' not in flow_data.columns and 'hour' in flow_data.columns
+    
+    if is_cached_format:
+        # 캐시 데이터는 시간별 unique_devices만 있으므로 Apple/Android 분석 불가
+        st.info("📊 캐시된 집계 데이터에서는 Apple/Android 분류가 불가능합니다.")
+        st.warning("Raw 데이터가 필요합니다. (type 컬럼 필요)")
+        
+        # 시간대별 기본 그래프라도 표시
+        st.markdown("### 📊 시간대별 디바이스 수 (대체 표시)")
+        hourly_stats = flow_data.groupby('hour')['unique_devices'].mean().reset_index()
+        hourly_stats['time_label'] = hourly_stats['hour'].apply(lambda x: f"{x:02d}:00")
+        
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=hourly_stats['time_label'],
+            y=hourly_stats['unique_devices'],
+            name='Unique Devices',
+            marker_color='#1f77b4'
+        ))
+        fig.update_layout(
+            title='시간대별 평균 디바이스 수',
+            xaxis_title='Hour',
+            yaxis_title='Unique Devices',
+            height=350,
+            template='plotly_white'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        return
+    
+    from src.flow_analysis import identify_device_type_from_type_column
+    
     st.info("디바이스 타입별 분포 분석 (type 컬럼: 1=Apple, 10=Android)")
     
     # 데이터 전처리
