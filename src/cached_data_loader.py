@@ -412,6 +412,31 @@ class CachedDataLoader:
         """메모리 캐시 초기화"""
         self._cache.clear()
         self._metadata = None
+    
+    def list_location_heatmaps(self) -> List[Dict]:
+        """캐시된 위치 히트맵 이미지 목록 반환"""
+        heatmaps = []
+        try:
+            for f in self.cache_folder.iterdir():
+                if f.name.startswith('location_heatmap_') and f.suffix == '.png':
+                    # 파일명에서 building, level 추출
+                    # 예: location_heatmap_A_1F.png -> building=A, level=1F
+                    parts = f.stem.replace('location_heatmap_', '').split('_')
+                    if len(parts) >= 2:
+                        building = parts[0]
+                        level = '_'.join(parts[1:])
+                    else:
+                        building = parts[0] if parts else 'Unknown'
+                        level = 'Unknown'
+                    heatmaps.append({
+                        'filename': f.name,
+                        'building': building,
+                        'level': level,
+                        'path': str(f)
+                    })
+        except Exception:
+            pass
+        return sorted(heatmaps, key=lambda x: (x['building'], x['level']))
 
 
 def find_available_datasets(base_folder: str = None) -> List[Dict]:
