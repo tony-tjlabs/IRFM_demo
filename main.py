@@ -2358,11 +2358,92 @@ def render_t41_overview():
     
     t41_data = st.session_state.get('tward41_data')
     sward_config = st.session_state.get('sward_config')
+    cache_loader = st.session_state.get('cache_loader')
     
     if t41_data is None or t41_data.empty:
         st.warning("No T41 data available.")
         return
     
+    # 캐시 데이터 형식 확인 (activity_analysis: mac, minute_bin, signal_count, building, level, space_type, activity_status)
+    is_cached_format = 'minute_bin' in t41_data.columns and 'activity_status' in t41_data.columns
+    
+    if is_cached_format:
+        # 캐시 데이터: 이미 집계된 결과 사용
+        t41_with_loc = t41_data  # 이미 building, level 포함
+        
+        # 활성 작업자 계산 (activity_status == 'Active')
+        active_data = t41_data[t41_data['activity_status'] == 'Active']
+        active_workers = active_data['mac'].nunique()
+        total_detected = t41_data['mac'].nunique()
+        inactive_workers = total_detected - active_workers
+        
+        total_records = len(t41_data)
+        buildings = t41_data['building'].dropna().unique().tolist() if 'building' in t41_data.columns else []
+        
+        # 메트릭 표시
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown(f"""
+            <div style="font-size: 0.7em; padding: 10px; background: #e8f4ea; border-radius: 5px; color: #000;">
+                <div style="color: #333;">👷 Active Workers</div>
+                <div style="font-size: 1.5em; font-weight: bold; color: #000;">{active_workers:,}</div>
+                <div style="font-size: 0.8em; color: #666;">({inactive_workers:,} inactive helmets)</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div style="font-size: 0.7em; padding: 10px; background: #e8f0fe; border-radius: 5px; color: #000;">
+                <div style="color: #333;">📊 Total Records</div>
+                <div style="font-size: 1.5em; font-weight: bold; color: #000;">{total_records:,}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"""
+            <div style="font-size: 0.7em; padding: 10px; background: #fef7e0; border-radius: 5px; color: #000;">
+                <div style="color: #333;">🏢 Buildings</div>
+                <div style="font-size: 1.5em; font-weight: bold; color: #000;">{len(buildings)}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            # 가장 붐비는 빌딩
+            if 'building' in active_data.columns and not active_data.empty:
+                busiest = active_data.groupby('building')['mac'].nunique().idxmax()
+                busiest_count = active_data.groupby('building')['mac'].nunique().max()
+            else:
+                busiest = "N/A"
+                busiest_count = 0
+            st.markdown(f"""
+            <div style="font-size: 0.7em; padding: 10px; background: #fce8e6; border-radius: 5px; color: #000;">
+                <div style="color: #333;">🔥 Busiest Building</div>
+                <div style="font-size: 1.2em; font-weight: bold; color: #000;">{busiest}</div>
+                <div style="font-size: 0.8em; color: #666;">{busiest_count} workers</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # 시간대별 작업자 분포
+        st.markdown("### ⏰ Hourly Active Worker Distribution")
+        t41_data['hour'] = pd.to_datetime(t41_data['minute_bin']).dt.hour
+        hourly_workers = t41_data[t41_data['activity_status'] == 'Active'].groupby('hour')['mac'].nunique().reset_index()
+        hourly_workers.columns = ['Hour', 'Active Workers']
+        
+        import plotly.express as px
+        fig = px.bar(hourly_workers, x='Hour', y='Active Workers', 
+                     title='Active Workers by Hour',
+                     color='Active Workers', color_continuous_scale='Blues')
+        fig.update_layout(height=300)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        return  # 캐시 모드에서는 여기서 종료
+    
+    # =========================================================================
+    # 원본 데이터 형식 처리
+    # =========================================================================
     # Join with sward_config for building/level info
     if sward_config is not None:
         t41_with_loc = t41_data.merge(
@@ -2376,6 +2457,86 @@ def render_t41_overview():
     # =========================================================================
     # 활성/비활성 작업자 분리 (1분에 2회 이상 = 활성)
     # =========================================================================
+    # 캐시 데이터 형식 확인
+    is_cached_format = 'minute_bin' in t41_data.columns and 'activity_status' in t41_data.columns
+    
+    if is_cached_format:
+        # 캐시 데이터: 이미 집계된 결과 사용
+        active_data = t41_data[t41_data['activity_status'] == 'Active']
+        active_workers = active_data['mac'].nunique()
+        total_detected = t41_data['mac'].nunique()
+        inactive_workers = total_detected - active_workers
+        total_records = len(t41_data)
+        buildings = t41_data['building'].dropna().unique().tolist() if 'building' in t41_data.columns else []
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("👷 Active Workers", f"{active_workers:,}", f"{inactive_workers:,} inactive")
+        with col2:
+            st.metric("📊 Total Records", f"{total_records:,}")
+        with col3:
+            st.metric("🏢 Buildings", len(buildings))
+        with col4:
+            if 'building' in active_data.columns and not active_data.empty:
+                busiest = active_data.groupby('building')['mac'].nunique().idxmax()
+            else:
+                busiest = "N/A"
+            st.metric("🔥 Busiest", busiest)
+        
+        st.markdown("---")
+        st.markdown("### ⏰ Hourly Active Worker Distribution")
+        t41_data_copy = t41_data.copy()
+        t41_data_copy['hour'] = pd.to_datetime(t41_data_copy['minute_bin']).dt.hour
+        hourly = t41_data_copy[t41_data_copy['activity_status'] == 'Active'].groupby('hour')['mac'].nunique().reset_index()
+        hourly.columns = ['Hour', 'Active Workers']
+        
+        import plotly.express as px
+        fig = px.bar(hourly, x='Hour', y='Active Workers', title='Active Workers by Hour')
+        fig.update_layout(height=300)
+        st.plotly_chart(fig, use_container_width=True)
+        return
+    
+    # 원본 데이터 형식 처리
+    # 캐시 데이터 형식 확인
+    is_cached_format = 'minute_bin' in t41_data.columns and 'activity_status' in t41_data.columns
+    
+    if is_cached_format:
+        # 캐시 데이터: 이미 집계된 결과 사용
+        active_data = t41_data[t41_data['activity_status'] == 'Active']
+        active_workers = active_data['mac'].nunique()
+        total_detected = t41_data['mac'].nunique()
+        inactive_workers = total_detected - active_workers
+        total_records = len(t41_data)
+        buildings = t41_data['building'].dropna().unique().tolist() if 'building' in t41_data.columns else []
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("👷 Active Workers", f"{active_workers:,}", f"{inactive_workers:,} inactive")
+        with col2:
+            st.metric("📊 Total Records", f"{total_records:,}")
+        with col3:
+            st.metric("🏢 Buildings", len(buildings))
+        with col4:
+            if 'building' in active_data.columns and not active_data.empty:
+                busiest = active_data.groupby('building')['mac'].nunique().idxmax()
+            else:
+                busiest = "N/A"
+            st.metric("🔥 Busiest", busiest)
+        
+        st.markdown("---")
+        st.markdown("### ⏰ Hourly Active Worker Distribution")
+        t41_data_copy = t41_data.copy()
+        t41_data_copy['hour'] = pd.to_datetime(t41_data_copy['minute_bin']).dt.hour
+        hourly = t41_data_copy[t41_data_copy['activity_status'] == 'Active'].groupby('hour')['mac'].nunique().reset_index()
+        hourly.columns = ['Hour', 'Active Workers']
+        
+        import plotly.express as px
+        fig = px.bar(hourly, x='Hour', y='Active Workers', title='Active Workers by Hour')
+        fig.update_layout(height=300)
+        st.plotly_chart(fig, use_container_width=True)
+        return
+    
+    # 원본 데이터 형식 처리
     t41_copy = t41_with_loc.copy()
     t41_copy['time'] = pd.to_datetime(t41_copy['time'])
     t41_copy['minute_bin'] = t41_copy['time'].dt.floor('1min')
