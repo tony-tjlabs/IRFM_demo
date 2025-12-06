@@ -279,35 +279,34 @@ def render_dashboard_mode():
         t41_results = cache_loader.load_t41_activity_analysis()
         if len(t41_results) > 0:
             st.session_state['t41_results_available'] = True
-            # Journey Heatmap용 activity_analysis 로드
-            activity_analysis = cache_loader.load_t41_activity_analysis()
-            if len(activity_analysis) > 0:
-                st.session_state['type41_activity_analysis'] = activity_analysis
-            # Journey Heatmap precomputed 데이터 로드 (10분 단위, 벡터화)
+            st.session_state['type41_activity_analysis'] = t41_results
+            # Journey Heatmap precomputed 데이터 로드
             journey_heatmap = cache_loader.load_t41_journey_heatmap()
             if len(journey_heatmap) > 0:
                 st.session_state['type41_journey_heatmap'] = journey_heatmap
+    except:
+        st.session_state['t41_results_available'] = False
     
-    if raw_data_status.get('flow', False):
-        if 'flow_data' not in st.session_state or st.session_state.get('_dashboard_dataset') != selected_name:
-            st.session_state['flow_data'] = cache_loader.load_raw_flow()
+    # Flow 분석 결과 확인 및 로드
+    try:
+        flow_results = cache_loader.load_flow_hourly_flow()
+        if len(flow_results) > 0:
+            st.session_state['flow_results_available'] = True
+    except:
+        st.session_state['flow_results_available'] = False
     
-    if raw_data_status.get('sward_config', False):
-        if 'sward_config' not in st.session_state or st.session_state.get('_dashboard_dataset') != selected_name:
-            st.session_state['sward_config'] = cache_loader.load_raw_sward_config()
+    # Sward config 로드 (metadata에서)
+    try:
+        metadata = cache_loader.get_metadata()
+        if metadata:
             # building/level 목록 설정
-            sward_config = st.session_state['sward_config']
-            if 'building' in sward_config.columns:
-                st.session_state['buildings'] = sward_config['building'].unique().tolist()
-                if st.session_state['buildings']:
-                    first_building = st.session_state['buildings'][0]
-                    st.session_state['building'] = first_building
-                    st.session_state['_last_building'] = first_building
-                    levels = sward_config[sward_config['building'] == first_building]['level'].unique().tolist()
-                    st.session_state['levels'] = levels
-                    if levels:
-                        st.session_state['level'] = levels[0]
-                        st.session_state['_last_level'] = levels[0]
+            buildings = metadata.get('buildings', [])
+            if buildings:
+                st.session_state['buildings'] = buildings
+                st.session_state['building'] = buildings[0]
+                st.session_state['_last_building'] = buildings[0]
+    except:
+        pass
     
     # 현재 데이터셋 기록
     st.session_state['_dashboard_dataset'] = selected_name
