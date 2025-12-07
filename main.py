@@ -678,31 +678,28 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
     # 캐시된 1시간 평균 데이터 로드 (raw data 사용 안 함!)
     # =========================================================================
     try:
-        hourly_avg = cache_loader.load_flow_hourly_avg_from_2min()
+        # dashboard_results_flow_hourly_devices.parquet 파일 사용
+        # 컬럼: hour (0-23), unique_devices
+        hourly_avg = cache_loader.load_flow_hourly_devices()
+        
         if hourly_avg is None or hourly_avg.empty:
-            st.error("No hourly average data found in cache.")
+            st.error("No hourly device data found in cache.")
             return
         
         # 컬럼 이름 정규화
-        if 'hour' not in hourly_avg.columns and 'bin_index' in hourly_avg.columns:
-            hourly_avg['hour'] = hourly_avg['bin_index']
-        elif 'hour' not in hourly_avg.columns:
-            numeric_cols = hourly_avg.select_dtypes(include=['int64', 'float64']).columns
-            if len(numeric_cols) > 0:
-                hourly_avg['hour'] = hourly_avg[numeric_cols[0]]
-        
-        # device_count 컬럼 확인
         if 'device_count' not in hourly_avg.columns:
-            if 'avg_count' in hourly_avg.columns:
-                hourly_avg['device_count'] = hourly_avg['avg_count']
+            if 'unique_devices' in hourly_avg.columns:
+                hourly_avg['device_count'] = hourly_avg['unique_devices']
+            elif 'avg_unique_mac' in hourly_avg.columns:
+                hourly_avg['device_count'] = hourly_avg['avg_unique_mac']
             else:
-                numeric_cols = [c for c in hourly_avg.columns if c not in ['hour', 'bin_index']]
-                if len(numeric_cols) > 0:
-                    hourly_avg['device_count'] = hourly_avg[numeric_cols[0]]
+                st.error("Cannot find device count column in cache data")
+                return
         
-        # hour를 정수로 변환 (0-23)
-        hourly_avg['hour'] = pd.to_numeric(hourly_avg['hour'], errors='coerce').fillna(0).astype(int)
-        hourly_avg = hourly_avg[hourly_avg['hour'] < 24]
+        # hour 컬럼 확인 (이미 0-23 형식)
+        if 'hour' not in hourly_avg.columns:
+            st.error("Cannot find hour column in cache data")
+            return
         
         # Total Unique from Summary
         total_unique = 0
@@ -712,32 +709,6 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
             
     except Exception as e:
         st.error(f"Error loading flow data: {e}")
-        return
-        if sward_config is not None:
-            flow_with_loc = flow_copy.merge(
-                sward_config[['sward_id', 'building', 'level']],
-                on='sward_id',
-                how='left'
-            )
-        else:
-            flow_with_loc = flow_copy.copy()
-            flow_with_loc['building'] = 'Unknown'
-            flow_with_loc['level'] = 'Unknown'
-            
-        # 2분 단위 unique MAC 카운팅
-        two_min_counts = flow_with_loc.groupby('two_min_bin')['mac'].nunique().reset_index()
-        two_min_counts.columns = ['two_min_bin', 'device_count']
-        
-        # 10분 평균 계산
-        two_min_counts['ten_min_bin'] = two_min_counts['two_min_bin'] // 5
-        ten_min_avg = two_min_counts.groupby('ten_min_bin')['device_count'].mean().reset_index()
-        ten_min_avg.columns = ['ten_min_bin', 'avg_device_count']
-        ten_min_avg['time_label'] = (ten_min_avg['ten_min_bin'] + 1).astype(str)
-        
-        total_unique = flow_with_loc['mac'].nunique()
-    
-    if ten_min_avg is None:
-        st.error("No data available for Device Counting.")
         return
     
     # =========================================================================
