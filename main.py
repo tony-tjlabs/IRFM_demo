@@ -496,24 +496,17 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     
     if cache_loader:
         try:
-            # Load cached flow data
-            two_min_counts = cache_loader.load_flow_two_min_unique()
+            # Load cached flow hourly data (dashboard_results_flow_hourly_devices.parquet)
+            hourly_avg = cache_loader.load_flow_hourly_devices()
             
-            if not two_min_counts.empty:
-                # Ensure device_count column exists
-                if 'count' in two_min_counts.columns:
-                    two_min_counts = two_min_counts.rename(columns={'count': 'device_count'})
-                elif 'device_count' not in two_min_counts.columns:
-                    numeric_cols = two_min_counts.select_dtypes(include=['int64', 'float64']).columns
-                    if len(numeric_cols) > 0:
-                        two_min_counts['device_count'] = two_min_counts[numeric_cols[0]]
+            if hourly_avg is not None and not hourly_avg.empty:
+                # Rename columns for consistency
+                if 'unique_devices' in hourly_avg.columns:
+                    hourly_avg = hourly_avg.rename(columns={'unique_devices': 'avg_device_count'})
+                elif 'device_count' in hourly_avg.columns:
+                    hourly_avg = hourly_avg.rename(columns={'device_count': 'avg_device_count'})
                 
-                if 'device_count' in two_min_counts.columns:
-                    # Convert to hourly average
-                    two_min_counts['two_min_bin'] = pd.to_numeric(two_min_counts['two_min_bin'], errors='coerce').fillna(0).astype(int)
-                    two_min_counts['hour'] = two_min_counts['two_min_bin'] // 30
-                    hourly_avg = two_min_counts.groupby('hour')['device_count'].mean().reset_index()
-                    hourly_avg.columns = ['hour', 'avg_device_count']
+                if 'hour' in hourly_avg.columns and 'avg_device_count' in hourly_avg.columns:
                     
                     # Visualization
                     col1, col2 = st.columns(2)
@@ -535,7 +528,7 @@ def render_dashboard_overview(cache_loader, selected_dataset):
                 else:
                     st.info("No device count data available.")
             else:
-                st.info("No Flow cached data available.")
+                st.info("No Flow hourly data available.")
         except Exception as e:
             st.error(f"Failed to load Flow data: {e}")
     else:
