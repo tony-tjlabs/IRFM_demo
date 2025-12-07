@@ -795,48 +795,54 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
                         selected_level = "All"
                         st.info("Select a building to filter by level")
                 
-                # Load raw flow data for filtering (캐시에서만)
-                raw_flow = cache_loader.load_raw_flow()
+                # 캐시 데이터 활용: flow_results_sward_flow.parquet에서 building/level별 필터링
+                sward_flow = cache_loader.load_flow_sward()
                 
-                if raw_flow is not None and not raw_flow.empty:
-                    # S-Ward config 조인
-                    flow_with_loc = raw_flow.merge(
-                        sward_config[['sward_id', 'building', 'level']],
-                        on='sward_id',
-                        how='left'
-                    )
-                    
+                if sward_flow is not None and not sward_flow.empty:
                     # 필터 적용
                     if selected_building != "All":
-                        flow_filtered = flow_with_loc[flow_with_loc['building'] == selected_building].copy()
+                        sward_filtered = sward_flow[sward_flow['building'] == selected_building].copy()
                         if selected_level != "All":
-                            flow_filtered = flow_filtered[flow_filtered['level'] == selected_level].copy()
+                            sward_filtered = sward_filtered[sward_filtered['level'] == selected_level].copy()
                     else:
-                        flow_filtered = flow_with_loc.copy()
+                        sward_filtered = sward_flow.copy()
                     
-                    # 시간 파싱
-                    flow_filtered['time'] = pd.to_datetime(flow_filtered['time'])
-                    flow_filtered['hour'] = flow_filtered['time'].dt.hour
+                    # S-Ward ID 목록 가져오기
+                    selected_sward_ids = sward_filtered['sward_id'].unique()
                     
-                    # 시간별 unique MAC 계산
-                    hourly_devices = flow_filtered.groupby('hour')['mac'].nunique().reset_index()
-                    hourly_devices.columns = ['hour', 'unique_devices']
+                    # 전체 시간별 데이터를 사용하되, 선택된 S-Ward의 비율로 계산
+                    # 전체 unique devices * (선택된 S-Ward의 unique_devices 합 / 전체 S-Ward의 unique_devices 합)
+                    total_devices_in_selection = sward_filtered['unique_devices'].sum()
+                    total_devices_overall = sward_flow['unique_devices'].sum()
+                    ratio = total_devices_in_selection / total_devices_overall if total_devices_overall > 0 else 0
                     
-                    # 0-23시 보장
-                    all_hours = pd.DataFrame({'hour': range(24)})
-                    hourly_plot = all_hours.merge(hourly_devices, on='hour', how='left').fillna(0)
+                    # 전체 시간별 데이터 로드
+                    hourly_avg = cache_loader.load_flow_hourly_avg_from_2min()
+                    if hourly_avg is not None and not hourly_avg.empty:
+                        # 비율 적용
+                        hourly_plot = hourly_avg[['hour', 'avg_unique_mac']].copy()
+                        hourly_plot['unique_devices'] = (hourly_plot['avg_unique_mac'] * ratio).round(0)
+                        hourly_plot = hourly_plot[['hour', 'unique_devices']]
+                        
+                        # 0-23시 보장
+                        all_hours = pd.DataFrame({'hour': range(24)})
+                        hourly_plot = all_hours.merge(hourly_plot, on='hour', how='left').fillna(0)
+                    else:
+                        st.warning("Hourly average data not available.")
+                        hourly_plot = None
                     
-                    # 차트
-                    import plotly.graph_objects as go
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                        x=hourly_plot['hour'],
-                        y=hourly_plot['unique_devices'],
-                        mode='lines+markers',
-                        name='Unique Devices',
-                        line=dict(color='#2196F3', width=3),
-                        marker=dict(size=8)
-                    ))
+                    if hourly_plot is not None:
+                        # 차트
+                        import plotly.graph_objects as go
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=hourly_plot['hour'],
+                            y=hourly_plot['unique_devices'],
+                            mode='lines+markers',
+                            name='Unique Devices',
+                            line=dict(color='#2196F3', width=3),
+                            marker=dict(size=8)
+                        ))
                     
                     title_suffix = ""
                     if selected_building != "All":
@@ -856,21 +862,21 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
                             dtick=1,
                             range=[-0.5, 23.5]
                         )
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # 통계 메트릭
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("📱 Peak", f"{hourly_plot['unique_devices'].max():.0f}")
-                    with col2:
-                        st.metric("📊 Average", f"{hourly_plot['unique_devices'].mean():.1f}")
-                    with col3:
-                        st.metric("📉 Min", f"{hourly_plot['unique_devices'].min():.0f}")
-                    with col4:
-                        st.metric("🔢 Total Unique (Daily)", f"{flow_filtered['mac'].nunique():,}")
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # 통계 메트릭
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("📱 Peak", f"{hourly_plot['unique_devices'].max():.0f}")
+                        with col2:
+                            st.metric("📊 Average", f"{hourly_plot['unique_devices'].mean():.1f}")
+                        with col3:
+                            st.metric("📉 Min", f"{hourly_plot['unique_devices'].min():.0f}")
+                        with col4:
+                            st.metric("🔢 Total Unique (Daily)", f"{int(total_devices_in_selection):,}")
                 else:
-                    st.warning("Raw flow data not available in cache.")
+                    st.warning("S-Ward flow data not available in cache.")
             else:
                 st.info("No building information available.")
         else:
