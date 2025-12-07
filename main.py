@@ -886,66 +886,24 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
 
 
 def _render_tward_vs_mobile_tab(flow_data, sward_config, cache_loader=None):
-    """T-Ward vs Mobile 탭: T41 인원수와 Mobile 디바이스 수 비교 (캐시 사용)"""
+    """T-Ward vs Mobile 탭: T41 인원수와 Mobile 디바이스 수 비교 (캐시 전용)"""
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     
     st.subheader("🔄 T-Ward vs Mobile Device Count")
     st.info("Compare T41 (T-Ward) workers vs Mobile Phone devices.")
     
-    # Load S-Ward configuration from cache
-    if sward_config is None and cache_loader:
-        try:
-            sward_config = cache_loader.load_raw_sward_config()
-            if sward_config is not None and not sward_config.empty:
-                sward_config['sward_id'] = sward_config['sward_id'].astype(int)
-        except Exception as e:
-            print(f"Error loading sward config in T-Ward vs Mobile: {e}")
-            sward_config = None
-    
-    # T41 데이터 확인
-    t41_data = st.session_state.get('tward41_data')
-    
-    if t41_data is None and cache_loader is None:
-        st.warning("No data available for comparison.")
+    if cache_loader is None:
+        st.warning("Cache loader not available.")
         return
     
-    # Building 목록 가져오기
+    # Building 목록 가져오기 (캐시에서)
     buildings = []
-    t41_with_loc = None
-    
-    if t41_data is not None and sward_config is not None:
-        try:
-            # Ensure sward_id types match
-            sward_config_copy = sward_config.copy()
-            if 'sward_id' in sward_config_copy.columns:
-                sward_config_copy['sward_id'] = sward_config_copy['sward_id'].astype(int)
-            
-            # Check required columns
-            required_cols = ['sward_id', 'building', 'level']
-            if all(col in sward_config_copy.columns for col in required_cols):
-                t41_with_loc = t41_data.merge(
-                    sward_config_copy[required_cols],
-                    on='sward_id',
-                    how='left'
-                )
-            else:
-                st.warning(f"Missing required columns in sward_config. Available: {sward_config_copy.columns.tolist()}")
-                t41_with_loc = None
-        except Exception as e:
-            st.error(f"Error merging T41 data with sward config: {e}")
-            t41_with_loc = None
-        
-        if t41_with_loc is not None:
-            buildings = t41_with_loc['building'].dropna().unique().tolist()
-            buildings = sorted([b for b in buildings if str(b) != 'nan'])
-    elif cache_loader:
-        # Try to get buildings from cache filters
-        try:
-            filters = cache_loader.get_available_t41_stats_filters()
-            buildings = sorted(list(set([f.split('-')[0] for f in filters if '-' in f])))
-        except:
-            buildings = []
+    try:
+        filters = cache_loader.get_available_t41_stats_filters()
+        buildings = sorted(list(set([f.split('-')[0] for f in filters if '-' in f])))
+    except:
+        buildings = []
     
     # =========================================================================
     # Building/Level 필터
@@ -959,16 +917,11 @@ def _render_tward_vs_mobile_tab(flow_data, sward_config, cache_loader=None):
     selected_level = "All"
     if selected_building != "All":
         levels = []
-        if t41_with_loc is not None:
-            levels = t41_with_loc[t41_with_loc['building'] == selected_building]['level'].dropna().unique().tolist()
-            levels = sorted([l for l in levels if str(l) != 'nan'])
-        elif cache_loader:
-             # Try to get levels from cache filters
-             try:
-                filters = cache_loader.get_available_t41_stats_filters()
-                levels = sorted([f.split('-')[1] for f in filters if f.startswith(selected_building + '-')])
-             except:
-                levels = []
+        try:
+            filters = cache_loader.get_available_t41_stats_filters()
+            levels = sorted([f.split('-')[1] for f in filters if f.startswith(selected_building + '-')])
+        except:
+            levels = []
         
         if levels:
             with col2:
@@ -977,81 +930,18 @@ def _render_tward_vs_mobile_tab(flow_data, sward_config, cache_loader=None):
     st.markdown("---")
     
     # =========================================================================
-    # 캐시에서 데이터 로드 (빠른 로딩)
+    # 캐시에서 데이터 로드 (캐시 전용)
     # =========================================================================
     merged = None
     
-    if cache_loader:
-        try:
-            merged = cache_loader.load_tvm_comparison(selected_building, selected_level)
-            if merged is not None and not merged.empty:
-                pass # Loaded successfully
-            else:
-                merged = None
-        except Exception as e:
-            print(f"Error loading TVM comparison: {e}")
-            merged = None
-    
-    # =========================================================================
-    # 캐시가 없으면 실시간 계산 (fallback)
-    # =========================================================================
-    if merged is None and t41_data is not None and flow_data is not None:
-        t41_copy = t41_data.copy()
-        t41_copy['time'] = pd.to_datetime(t41_copy['time'])
-        flow_copy = flow_data.copy()
-        flow_copy['time'] = pd.to_datetime(flow_copy['time'])
-        
-        if sward_config is not None:
-            try:
-                # Ensure sward_id types match
-                sward_config_copy = sward_config.copy()
-                if 'sward_id' in sward_config_copy.columns:
-                    sward_config_copy['sward_id'] = sward_config_copy['sward_id'].astype(int)
-                t41_with_loc = t41_copy.merge(sward_config_copy[['sward_id', 'building', 'level']], on='sward_id', how='left')
-                flow_with_loc = flow_copy.merge(sward_config_copy[['sward_id', 'building', 'level']], on='sward_id', how='left')
-            except Exception as e:
-                st.error(f"Error merging data with sward config: {e}")
-                t41_with_loc = t41_copy
-                flow_with_loc = flow_copy
-        else:
-            t41_with_loc = t41_copy
-            flow_with_loc = flow_copy
-        
-        # 데이터 필터링
-        if selected_building != "All":
-            t41_filtered = t41_with_loc[t41_with_loc['building'] == selected_building].copy()
-            flow_filtered = flow_with_loc[flow_with_loc['building'] == selected_building].copy()
-            if selected_level != "All":
-                t41_filtered = t41_filtered[t41_filtered['level'] == selected_level].copy()
-                flow_filtered = flow_filtered[flow_filtered['level'] == selected_level].copy()
-        else:
-            t41_filtered = t41_with_loc.copy()
-            flow_filtered = flow_with_loc.copy()
-        
-        # T41 계산
-        t41_filtered['ten_min_bin'] = (t41_filtered['time'].dt.hour * 6 + t41_filtered['time'].dt.minute // 10)
-        t41_counts = t41_filtered.groupby('ten_min_bin')['mac'].nunique().reset_index()
-        t41_counts.columns = ['bin_index', 't41_count']
-        
-        # Flow 계산
-        flow_filtered['two_min_bin'] = (flow_filtered['time'].dt.hour * 30 + flow_filtered['time'].dt.minute // 2)
-        flow_filtered['ten_min_bin'] = (flow_filtered['time'].dt.hour * 6 + flow_filtered['time'].dt.minute // 10)
-        two_min_counts = flow_filtered.groupby('two_min_bin')['mac'].nunique().reset_index()
-        two_min_counts.columns = ['two_min_bin', 'device_count']
-        two_min_counts['ten_min_bin'] = two_min_counts['two_min_bin'] // 5
-        flow_ten_min = two_min_counts.groupby('ten_min_bin')['device_count'].mean().reset_index()
-        flow_ten_min.columns = ['bin_index', 'mobile_count']
-        
-        # 병합
-        all_bins = pd.DataFrame({'bin_index': range(144)})
-        merged = all_bins.merge(t41_counts, on='bin_index', how='left').fillna(0)
-        merged = merged.merge(flow_ten_min, on='bin_index', how='left').fillna(0)
-        merged['t41_count'] = merged['t41_count'].astype(int)
-        merged['time_label'] = merged['bin_index'].apply(lambda x: f"{x//6:02d}:{(x%6)*10:02d}")
-        merged['ratio'] = merged.apply(
-            lambda row: (row['t41_count'] / row['mobile_count'] * 100) if row['mobile_count'] > 0 else 0, 
-            axis=1
-        )
+    try:
+        merged = cache_loader.load_tvm_comparison(selected_building, selected_level)
+        if merged is None or merged.empty:
+            st.warning(f"No TVM comparison data available for {selected_building}-{selected_level}")
+            return
+    except Exception as e:
+        st.error(f"Error loading TVM comparison: {e}")
+        return
     
     # =========================================================================
     # 비교 차트
