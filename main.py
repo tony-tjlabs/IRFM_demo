@@ -758,8 +758,12 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
     st.markdown("### 🏢 Device Count by Building/Floor")
     
     try:
-        # Load S-Ward configuration to get building/level list
-        sward_config = st.session_state.get('sward_config')
+        # Load S-Ward configuration from cache
+        sward_config = None
+        try:
+            sward_config = cache_loader.load_raw_sward_config()
+        except:
+            sward_config = st.session_state.get('sward_config')
         
         if sward_config is not None and not sward_config.empty:
             # Building 목록 가져오기
