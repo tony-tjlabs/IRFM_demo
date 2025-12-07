@@ -752,18 +752,117 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
             st.metric("🔢 Total Unique (Daily)", "N/A")
     
     # =========================================================================
-    # 2. 빌딩별 인원수 추이
+    # 2. 빌딩별 인원수 추이 (전체 기간 통계)
     # =========================================================================
     st.markdown("---")
     st.markdown("### 🏢 Device Count by Building")
-    st.info("Building breakdown not available in cache mode (Coming Soon)")
+    
+    try:
+        # Load building-level aggregated data
+        sward_flow = cache_loader.load_flow_sward()
+        
+        if sward_flow is not None and not sward_flow.empty and 'building' in sward_flow.columns:
+            # Building별 통계 계산
+            building_stats = sward_flow.groupby('building').agg({
+                'unique_devices': ['sum', 'mean', 'max', 'min'],
+                'sward_id': 'count'
+            }).reset_index()
+            building_stats.columns = ['Building', 'Total Devices', 'Avg per S-Ward', 'Max S-Ward', 'Min S-Ward', 'S-Ward Count']
+            building_stats = building_stats.sort_values('Total Devices', ascending=False)
+            
+            # 차트
+            import plotly.graph_objects as go
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=building_stats['Building'],
+                y=building_stats['Total Devices'],
+                marker=dict(color=['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A']),
+                text=building_stats['Total Devices'],
+                textposition='outside'
+            ))
+            fig.update_layout(
+                title='Total Unique Devices by Building (Full Period)',
+                xaxis_title='Building',
+                yaxis_title='Total Unique Devices',
+                height=350,
+                template='plotly_white'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # 통계 테이블
+            st.dataframe(building_stats.style.format({
+                'Total Devices': '{:,.0f}',
+                'Avg per S-Ward': '{:,.1f}',
+                'Max S-Ward': '{:,.0f}',
+                'Min S-Ward': '{:,.0f}',
+                'S-Ward Count': '{:.0f}'
+            }), use_container_width=True, hide_index=True)
+            
+            st.info("📊 **Note**: Shows total unique devices per building for the full period. Hourly breakdown requires additional cache data.")
+        else:
+            st.info("Building breakdown not available in cache mode.")
+    except Exception as e:
+        st.error(f"Error loading building data: {e}")
     
     # =========================================================================
-    # 3. 층별 인원수 추이
+    # 3. 층별 인원수 추이 (전체 기간 통계)
     # =========================================================================
     st.markdown("---")
     st.markdown("### 🏗️ Device Count by Floor")
-    st.info("Floor breakdown not available in cache mode (Coming Soon)")
+    
+    try:
+        # Load building-level aggregated data
+        sward_flow = cache_loader.load_flow_sward()
+        
+        if sward_flow is not None and not sward_flow.empty and 'building' in sward_flow.columns and 'level' in sward_flow.columns:
+            # Building-Level 조합
+            sward_flow['building_level'] = sward_flow['building'] + '-' + sward_flow['level']
+            
+            # Building-Level별 통계 계산
+            level_stats = sward_flow.groupby('building_level').agg({
+                'unique_devices': ['sum', 'mean', 'max', 'min'],
+                'sward_id': 'count'
+            }).reset_index()
+            level_stats.columns = ['Building-Level', 'Total Devices', 'Avg per S-Ward', 'Max S-Ward', 'Min S-Ward', 'S-Ward Count']
+            level_stats = level_stats.sort_values('Total Devices', ascending=False)
+            
+            # 차트
+            import plotly.graph_objects as go
+            from src.colors import BUILDING_LEVEL_HEX_COLORS
+            
+            colors = [BUILDING_LEVEL_HEX_COLORS.get(bl, '#888888') for bl in level_stats['Building-Level']]
+            
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=level_stats['Building-Level'],
+                y=level_stats['Total Devices'],
+                marker=dict(color=colors),
+                text=level_stats['Total Devices'],
+                textposition='outside'
+            ))
+            fig.update_layout(
+                title='Total Unique Devices by Floor (Full Period)',
+                xaxis_title='Building-Level',
+                yaxis_title='Total Unique Devices',
+                height=400,
+                template='plotly_white'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # 통계 테이블
+            st.dataframe(level_stats.style.format({
+                'Total Devices': '{:,.0f}',
+                'Avg per S-Ward': '{:,.1f}',
+                'Max S-Ward': '{:,.0f}',
+                'Min S-Ward': '{:,.0f}',
+                'S-Ward Count': '{:.0f}'
+            }), use_container_width=True, hide_index=True)
+            
+            st.info("📊 **Note**: Shows total unique devices per floor for the full period. Hourly breakdown requires additional cache data.")
+        else:
+            st.info("Floor breakdown not available in cache mode.")
+    except Exception as e:
+        st.error(f"Error loading floor data: {e}")
 
 
 def _render_tward_vs_mobile_tab(flow_data, sward_config, cache_loader=None):
