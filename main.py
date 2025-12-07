@@ -167,10 +167,11 @@ def calculate_t41_hourly_stats(bin_stats_10min: pd.DataFrame) -> pd.DataFrame:
     - 10분 bin별 Active/Inactive MAC을 시간대별로 합산
     - 동일 MAC이 여러 bin에서 Active일 수 있으므로 max 사용
     """
-    # ten_min_bin에서 Hour 추출 (ten_min_bin은 0부터 시작, 6개가 1시간)
+    # bin_index에서 Hour 추출 (bin_index는 0부터 시작, 6개가 1시간)
     if 'Hour' not in bin_stats_10min.columns:
         bin_stats_10min = bin_stats_10min.copy()
-        bin_stats_10min['Hour'] = bin_stats_10min['ten_min_bin'] // 6
+        bin_index_col = 'bin_index' if 'bin_index' in bin_stats_10min.columns else 'ten_min_bin'
+        bin_stats_10min['Hour'] = bin_stats_10min[bin_index_col] // 6
     
     hourly = bin_stats_10min.groupby('Hour').agg({
         'Total': 'max',  # 해당 시간의 피크 Total
@@ -729,9 +730,12 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
     st.markdown("### 📈 Total Device Count Trend")
     
     # 차트
+    # x축을 0, 1, 2, ... 형태로 단순화
+    ten_min_avg['simple_label'] = ten_min_avg['ten_min_bin'].astype(str)
+    
     fig_total = go.Figure()
     fig_total.add_trace(go.Scatter(
-        x=ten_min_avg['time_label'],
+        x=ten_min_avg['simple_label'],
         y=ten_min_avg['avg_device_count'],
         mode='lines+markers',
         name='Total Devices',
@@ -746,7 +750,7 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
         template='plotly_white',
         xaxis=dict(
             tickmode='linear',
-            tick0=1,
+            tick0=0,
             dtick=10  # Show every 10th label
         )
     )
@@ -1188,6 +1192,17 @@ def _render_apple_vs_android_tab(flow_data, cache_loader=None):
     if 'Count' not in device_summary.columns or 'Device Type' not in device_summary.columns:
         st.error(f"Invalid device_summary columns: {device_summary.columns.tolist()}")
         return
+    
+    # 디바이스 타입 숫자를 이름으로 매핑 (1=Apple, 10=Android)
+    device_type_map = {
+        1: 'Apple',
+        '1': 'Apple', 
+        10: 'Android',
+        '10': 'Android',
+        'Apple': 'Apple',
+        'Android': 'Android'
+    }
+    device_summary['Device Type'] = device_summary['Device Type'].map(lambda x: device_type_map.get(x, 'Unknown'))
 
     # =========================================================================
     # 1. 전체 비율 (파이 차트)
@@ -1200,8 +1215,8 @@ def _render_apple_vs_android_tab(flow_data, cache_loader=None):
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        # 파이 차트
-        colors = {'Apple': '#A2AAAD', 'Android': '#3DDC84', 'Unknown': '#CCCCCC'}
+        # 도넛 차트 - 가독성 좋은 색상 및 흰색 배경
+        colors = {'Apple': '#007AFF', 'Android': '#3DDC84', 'Unknown': '#999999'}
         
         fig_pie = go.Figure(data=[go.Pie(
             labels=device_summary['Device Type'],
@@ -1210,12 +1225,16 @@ def _render_apple_vs_android_tab(flow_data, cache_loader=None):
             marker_colors=[colors.get(dt, '#888888') for dt in device_summary['Device Type']],
             textinfo='label+percent',
             textfont_size=14,
+            textposition='inside',
             hovertemplate='%{label}: %{value:,}<extra></extra>'
         )])
         fig_pie.update_layout(
             title='Device Type Distribution',
             height=350,
-            showlegend=True
+            showlegend=True,
+            paper_bgcolor='white',
+            plot_bgcolor='white',
+            font=dict(color='black')
         )
         st.plotly_chart(fig_pie, use_container_width=True)
     
@@ -1247,13 +1266,13 @@ def _render_apple_vs_android_tab(flow_data, cache_loader=None):
                                row_heights=[0.5, 0.5],
                                vertical_spacing=0.15)
     
-        # 상단: 절대값
+        # 상단: 절대값 - 가독성 좋은 색상
         if 'Apple' in hourly_pivot.columns:
             fig_hourly.add_trace(go.Bar(
                 x=hourly_pivot['Hour'],
                 y=hourly_pivot['Apple'],
                 name='Apple',
-                marker_color='#A2AAAD'
+                marker_color='#007AFF'
             ), row=1, col=1)
         
         if 'Android' in hourly_pivot.columns:
@@ -1270,7 +1289,7 @@ def _render_apple_vs_android_tab(flow_data, cache_loader=None):
             y=hourly_pivot['Apple %'],
             mode='lines+markers',
             name='Apple %',
-            line=dict(color='#A2AAAD', width=2),
+            line=dict(color='#007AFF', width=2),
             marker=dict(size=8)
         ), row=2, col=1)
         
