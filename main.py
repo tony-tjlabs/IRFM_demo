@@ -119,18 +119,12 @@ def calculate_t41_worker_stats_10min(t41_data: pd.DataFrame) -> pd.DataFrame:
     t41_copy['minute_bin'] = t41_copy['time'].dt.floor('1min')
     t41_copy['time_bin'] = (t41_copy['time'].dt.hour * 6 + t41_copy['time'].dt.minute // 10)
     
-    # 1분 단위 신호 수 계산
-    minute_signal = t41_copy.groupby(['mac', 'minute_bin']).size().reset_index(name='signals')
-    minute_signal['is_active'] = minute_signal['signals'] >= 2  # 1분에 2회 이상 = Active
-    minute_signal['time_bin'] = (
-        minute_signal['minute_bin'].dt.hour * 6 + 
-        minute_signal['minute_bin'].dt.minute // 10
-    )
+    # 10분 단위로 직접 신호 수 계산
+    bin_signal = t41_copy.groupby(['mac', 'time_bin']).size().reset_index(name='signals')
+    bin_signal['is_active'] = bin_signal['signals'] >= 11  # 10분에 11회 이상 = Active
     
-    # 10분 bin당 활성 여부 (10분 내에 1분이라도 활성이면 Active)
-    mac_bin_activity = minute_signal.groupby(['mac', 'time_bin']).agg({
-        'is_active': 'any'
-    }).reset_index()
+    # 10분 bin당 활성 여부
+    mac_bin_activity = bin_signal[['mac', 'time_bin', 'is_active']]
     
     # 10분 bin별 Total (신호가 있는 모든 MAC)
     bin_total = minute_signal.groupby('time_bin')['mac'].nunique().reset_index()
@@ -413,8 +407,8 @@ def render_dashboard_overview(cache_loader, selected_dataset):
                 import matplotlib.pyplot as plt
                 fig, ax = plt.subplots(figsize=(10, 4))
                 # 스택 막대그래프: 아래=Active(초록), 위=Inactive(회색)
-                ax.bar(hourly_stats['Hour'], hourly_stats['Active'], color='#4CAF50', label='Active (≥2 signals/min)')
-                ax.bar(hourly_stats['Hour'], hourly_stats['Inactive'], bottom=hourly_stats['Active'], color='#BDBDBD', label='Inactive')
+                ax.bar(hourly_stats['Hour'], hourly_stats['Active'], color='#4CAF50', label='Active (≥11 signals/10min)')
+                ax.bar(hourly_stats['Hour'], hourly_stats['Inactive'], bottom=hourly_stats['Active'], color='#BDBDBD', label='Inactive (<11 signals/10min)')
                 ax.set_xlabel('Hour')
                 ax.set_ylabel('Workers')
                 ax.set_title('T41 Workers by Hour (Active/Inactive)')
@@ -619,9 +613,7 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
                 two_min_counts['ten_min_bin'] = two_min_counts['two_min_bin'] // 5
                 ten_min_avg = two_min_counts.groupby('ten_min_bin')['device_count'].mean().reset_index()
                 ten_min_avg.columns = ['ten_min_bin', 'avg_device_count']
-                ten_min_avg['time_label'] = ten_min_avg['ten_min_bin'].apply(
-                    lambda x: f"{x//6:02d}:{(x%6)*10:02d}"
-                )
+                ten_min_avg['time_label'] = (ten_min_avg['ten_min_bin'] + 1).astype(str)
                 
                 # Total Unique from Summary
                 summary = cache_loader.get_summary()
@@ -658,9 +650,7 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
         two_min_counts['ten_min_bin'] = two_min_counts['two_min_bin'] // 5
         ten_min_avg = two_min_counts.groupby('ten_min_bin')['device_count'].mean().reset_index()
         ten_min_avg.columns = ['ten_min_bin', 'avg_device_count']
-        ten_min_avg['time_label'] = ten_min_avg['ten_min_bin'].apply(
-            lambda x: f"{x//6:02d}:{(x%6)*10:02d}"
-        )
+        ten_min_avg['time_label'] = (ten_min_avg['ten_min_bin'] + 1).astype(str)
         
         total_unique = flow_with_loc['mac'].nunique()
     
@@ -1057,15 +1047,29 @@ def _render_apple_vs_android_tab(flow_data, cache_loader=None):
             device_summary = cache_loader.load_flow_device_type_stats()
             # Ensure columns match
             if device_summary is not None and not device_summary.empty:
-                # Normalize column names
-                if 'device_type' in device_summary.columns:
-                    device_summary = device_summary.rename(columns={'device_type': 'Device Type'})
-                if 'count' in device_summary.columns:
-                    device_summary = device_summary.rename(columns={'count': 'Count'})
+                # Check current column names for debugging
+                current_cols = device_summary.columns.tolist()
+                
+                # Try different possible column name combinations
+                rename_map = {}
+                for col in current_cols:
+                    col_lower = col.lower()
+                    if 'device' in col_lower and 'type' in col_lower:
+                        rename_map[col] = 'Device Type'
+                    elif 'count' in col_lower or 'cnt' in col_lower:
+                        rename_map[col] = 'Count'
+                
+                if rename_map:
+                    device_summary = device_summary.rename(columns=rename_map)
+                
                 # Ensure required columns exist
                 if 'Device Type' not in device_summary.columns or 'Count' not in device_summary.columns:
-                    st.error("Cache data missing required columns")
-                    device_summary = None
+                    # Last resort: use first two columns
+                    if len(device_summary.columns) >= 2:
+                        device_summary.columns = ['Device Type', 'Count'] + list(device_summary.columns[2:])
+                    else:
+                        st.error(f"Cache data has unexpected columns: {current_cols}")
+                        device_summary = None
         except Exception as e:
             print(f"Error loading device type stats: {e}")
             device_summary = None
