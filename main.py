@@ -167,6 +167,11 @@ def calculate_t41_hourly_stats(bin_stats_10min: pd.DataFrame) -> pd.DataFrame:
     - 10분 bin별 Active/Inactive MAC을 시간대별로 합산
     - 동일 MAC이 여러 bin에서 Active일 수 있으므로 max 사용
     """
+    # ten_min_bin에서 Hour 추출 (ten_min_bin은 0부터 시작, 6개가 1시간)
+    if 'Hour' not in bin_stats_10min.columns:
+        bin_stats_10min = bin_stats_10min.copy()
+        bin_stats_10min['Hour'] = bin_stats_10min['ten_min_bin'] // 6
+    
     hourly = bin_stats_10min.groupby('Hour').agg({
         'Total': 'max',  # 해당 시간의 피크 Total
         'Active': 'max',  # 해당 시간의 피크 Active
@@ -471,7 +476,8 @@ def render_dashboard_overview(cache_loader, selected_dataset):
                     col1, col2 = st.columns(2)
                     with col1:
                         import plotly.graph_objects as go
-                        ten_min_avg['time_label'] = (ten_min_avg['ten_min_bin'] + 1).astype(str)
+                        # x축을 0, 1, 2, ... 형태로 단순화
+                        ten_min_avg['time_label'] = ten_min_avg['ten_min_bin'].astype(str)
                         
                         fig_total = go.Figure()
                         fig_total.add_trace(go.Scatter(
@@ -490,7 +496,7 @@ def render_dashboard_overview(cache_loader, selected_dataset):
                             template='plotly_white',
                             xaxis=dict(
                                 tickmode='linear',
-                                tick0=1,
+                                tick0=0,
                                 dtick=10
                             )
                         )
