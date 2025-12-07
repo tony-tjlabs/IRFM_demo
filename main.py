@@ -2532,32 +2532,6 @@ def render_t41_overview():
     - High density in {busiest_building} {busiest_level} suggests active work zone
     """
     st.info(ai_comment)
-                avg_dwell = dwell_display['Avg Dwell (min)'].iloc[-1]
-                fig.add_hline(y=avg_dwell, line_dash="dash", line_color="red",
-                             annotation_text=f"Avg: {avg_dwell} min")
-                st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("---")
-    
-    # =========================================================================
-    # AI Comment
-    # =========================================================================
-    st.markdown("### 🤖 AI Analysis Comment")
-    ai_comment = f"""
-    **Worker Mobility Summary:**
-    - **{active_workers:,}** active workers detected (helmets with vibration)
-    - **{inactive_workers:,}** inactive helmets (placed/stored without vibration)
-    - Busiest location: **{busiest_level}** with {busiest_level_count:,} active workers
-    
-    **Activity Detection:**
-    - Active: ≥2 signals per minute (helmet being worn and moving)
-    - Inactive: <2 signals per minute (helmet at rest)
-    
-    **Key Observations:**
-    - Peak activity hours align with work shifts
-    - Cross-building movement patterns detected
-    - Consider traffic optimization for high-congestion areas
-    """
     st.info(ai_comment)
 
 
