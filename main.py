@@ -887,6 +887,16 @@ def _render_tward_vs_mobile_tab(flow_data, sward_config, cache_loader=None):
     st.subheader("🔄 T-Ward vs Mobile Device Count")
     st.info("Compare T41 (T-Ward) workers vs Mobile Phone devices.")
     
+    # Load S-Ward configuration from cache
+    if sward_config is None and cache_loader:
+        try:
+            sward_config = cache_loader.load_raw_sward_config()
+            if sward_config is not None and not sward_config.empty:
+                sward_config['sward_id'] = sward_config['sward_id'].astype(int)
+        except Exception as e:
+            print(f"Error loading sward config in T-Ward vs Mobile: {e}")
+            sward_config = None
+    
     # T41 데이터 확인
     t41_data = st.session_state.get('tward41_data')
     
@@ -904,11 +914,18 @@ def _render_tward_vs_mobile_tab(flow_data, sward_config, cache_loader=None):
             sward_config_copy = sward_config.copy()
             if 'sward_id' in sward_config_copy.columns:
                 sward_config_copy['sward_id'] = sward_config_copy['sward_id'].astype(int)
-            t41_with_loc = t41_data.merge(
-                sward_config_copy[['sward_id', 'building', 'level']],
-                on='sward_id',
-                how='left'
-            )
+            
+            # Check required columns
+            required_cols = ['sward_id', 'building', 'level']
+            if all(col in sward_config_copy.columns for col in required_cols):
+                t41_with_loc = t41_data.merge(
+                    sward_config_copy[required_cols],
+                    on='sward_id',
+                    how='left'
+                )
+            else:
+                st.warning(f"Missing required columns in sward_config. Available: {sward_config_copy.columns.tolist()}")
+                t41_with_loc = None
         except Exception as e:
             st.error(f"Error merging T41 data with sward config: {e}")
             t41_with_loc = None
