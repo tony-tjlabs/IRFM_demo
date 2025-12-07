@@ -399,73 +399,119 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     
     st.markdown("---")
     
-    # Hourly summary (2-min aggregation)
-    st.subheader("⏰ Hourly Personnel Status (2-min Average)")
+    # =========================================================================
+    # T41 Worker Status Chart (Cache-based, same as T41 Overview tab)
+    # =========================================================================
+    st.subheader("⏰ T41 Worker Status (10-min intervals)")
     
-    # Show hourly worker count if T41 data exists
-    t41_data = st.session_state.get('tward41_data')
+    cache_loader = st.session_state.get('cache_loader')
     
-    if t41_data is not None and not t41_data.empty:
-        # 공통 함수 사용: T41 탭과 동일한 로직
-        if 'time' in t41_data.columns:
-            # 10분 단위 stats 계산 (공통 함수)
-            bin_stats_10min = calculate_t41_worker_stats_10min(t41_data)
+    if cache_loader:
+        try:
+            # Load cached stats (same as T41 Overview tab)
+            bin_stats = cache_loader.load_t41_stats_10min("All", "All")
             
-            # 시간대별 집계 (피크 값 사용)
-            hourly_stats = calculate_t41_hourly_stats(bin_stats_10min)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("#### 👷 T41 Worker Status (Active/Inactive)")
-                import matplotlib.pyplot as plt
-                fig, ax = plt.subplots(figsize=(10, 4))
-                # 스택 막대그래프: 아래=Active(초록), 위=Inactive(회색)
-                ax.bar(hourly_stats['Hour'], hourly_stats['Active'], color='#4CAF50', label='Active (≥11 signals/10min)')
-                ax.bar(hourly_stats['Hour'], hourly_stats['Inactive'], bottom=hourly_stats['Active'], color='#BDBDBD', label='Inactive (<11 signals/10min)')
-                ax.set_xlabel('Hour')
-                ax.set_ylabel('Workers')
-                ax.set_title('T41 Workers by Hour (Active/Inactive)')
-                ax.set_xticks(range(0, 24))
-                ax.legend(loc='upper right')
-                st.pyplot(fig)
-                plt.close()
-            
-            with col2:
-                st.dataframe(hourly_stats[['Hour', 'Active', 'Inactive', 'Total']], use_container_width=True, hide_index=True)
+            if bin_stats is not None and not bin_stats.empty:
+                # 시간대별 집계 (피크 값 사용)
+                hourly_stats = calculate_t41_hourly_stats(bin_stats)
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("#### 👷 T41 Worker Status (Active/Inactive)")
+                    import matplotlib.pyplot as plt
+                    fig, ax = plt.subplots(figsize=(10, 4))
+                    # 스택 막대그래프: 아래=Active(초록), 위=Inactive(회색)
+                    ax.bar(hourly_stats['Hour'], hourly_stats['Active'], color='#4CAF50', label='Active (≥11 signals/10min)')
+                    ax.bar(hourly_stats['Hour'], hourly_stats['Inactive'], bottom=hourly_stats['Active'], color='#BDBDBD', label='Inactive (<11 signals/10min)')
+                    ax.set_xlabel('Hour')
+                    ax.set_ylabel('Workers')
+                    ax.set_title('T41 Workers by Hour (Active/Inactive)')
+                    ax.set_xticks(range(0, 24))
+                    ax.legend(loc='upper right')
+                    st.pyplot(fig)
+                    plt.close()
+                
+                with col2:
+                    st.dataframe(hourly_stats[['Hour', 'Active', 'Inactive', 'Total']], use_container_width=True, hide_index=True)
+            else:
+                st.info("No T41 cached data available.")
+        except Exception as e:
+            st.error(f"Failed to load T41 data: {e}")
+    else:
+        st.info("Cache loader not initialized.")
     
-    # Flow 데이터가 있으면 시간대별 유동인구 표시
-    flow_data = st.session_state.get('flow_data')
+    # =========================================================================
+    # Flow Device Counting Chart (Cache-based, same as Device Counting tab)
+    # =========================================================================
+    st.subheader("📱 MobilePhone Device Counting (10-min avg)")
     
-    if flow_data is not None and not flow_data.empty:
-        if 'time' in flow_data.columns:
-            flow_data_copy = flow_data.copy()
-            flow_data_copy['time'] = pd.to_datetime(flow_data_copy['time'])
-            flow_data_copy['two_min_bin'] = flow_data_copy['time'].dt.floor('2min')
-            flow_data_copy['hour'] = flow_data_copy['time'].dt.hour
+    if cache_loader:
+        try:
+            # Load cached flow data (same as Device Counting tab)
+            two_min_counts = cache_loader.load_flow_two_min_unique()
             
-            # 2분 단위 unique MAC 수
-            two_min_counts = flow_data_copy.groupby(['hour', 'two_min_bin'])['mac'].nunique().reset_index()
-            two_min_counts.columns = ['hour', 'two_min_bin', 'unique_macs']
-            
-            # 시간대별 평균
-            hourly_avg = two_min_counts.groupby('hour')['unique_macs'].mean().reset_index()
-            hourly_avg.columns = ['Hour', 'Avg Devices (2min basis)']
-            
-            st.markdown("#### 📱 MobilePhone Traffic Status")
-            col1, col2 = st.columns(2)
-            with col1:
-                import matplotlib.pyplot as plt
-                fig, ax = plt.subplots(figsize=(10, 4))
-                ax.bar(hourly_avg['Hour'], hourly_avg['Avg Devices (2min basis)'], color='#2196F3')
-                ax.set_xlabel('Hour')
-                ax.set_ylabel('Average Devices')
-                ax.set_title('MobilePhone Devices by Hour (2-min unique MAC average)')
-                ax.set_xticks(range(0, 24))
-                st.pyplot(fig)
-                plt.close()
-            
-            with col2:
-                st.dataframe(hourly_avg, use_container_width=True)
+            if not two_min_counts.empty:
+                # Ensure device_count column exists
+                if 'count' in two_min_counts.columns:
+                    two_min_counts = two_min_counts.rename(columns={'count': 'device_count'})
+                elif 'device_count' not in two_min_counts.columns:
+                    # If neither exists, use the first numeric column
+                    numeric_cols = two_min_counts.select_dtypes(include=['int64', 'float64']).columns
+                    if len(numeric_cols) > 0:
+                        two_min_counts['device_count'] = two_min_counts[numeric_cols[0]]
+                
+                if 'device_count' in two_min_counts.columns:
+                    # 10분 평균 계산 (two_min_bin을 정수로 변환)
+                    two_min_counts['two_min_bin'] = pd.to_numeric(two_min_counts['two_min_bin'], errors='coerce').fillna(0).astype(int)
+                    two_min_counts['ten_min_bin'] = two_min_counts['two_min_bin'] // 5
+                    ten_min_avg = two_min_counts.groupby('ten_min_bin')['device_count'].mean().reset_index()
+                    ten_min_avg.columns = ['ten_min_bin', 'avg_device_count']
+                    
+                    # Visualization (same as Device Counting tab)
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        import plotly.graph_objects as go
+                        ten_min_avg['time_label'] = (ten_min_avg['ten_min_bin'] + 1).astype(str)
+                        
+                        fig_total = go.Figure()
+                        fig_total.add_trace(go.Scatter(
+                            x=ten_min_avg['time_label'],
+                            y=ten_min_avg['avg_device_count'],
+                            mode='lines+markers',
+                            name='Total Devices',
+                            line=dict(color='#1f77b4', width=3),
+                            marker=dict(size=8)
+                        ))
+                        fig_total.update_layout(
+                            title='Device Count (10-min avg)',
+                            xaxis_title='Time Sequence',
+                            yaxis_title='Average Device Count',
+                            height=350,
+                            template='plotly_white',
+                            xaxis=dict(
+                                tickmode='linear',
+                                tick0=1,
+                                dtick=10
+                            )
+                        )
+                        st.plotly_chart(fig_total, use_container_width=True)
+                    
+                    with col2:
+                        st.markdown("#### 📊 Statistics")
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            st.metric("📱 Peak", f"{ten_min_avg['avg_device_count'].max():.0f}")
+                            st.metric("📉 Min", f"{ten_min_avg['avg_device_count'].min():.0f}")
+                        with col_b:
+                            st.metric("📊 Average", f"{ten_min_avg['avg_device_count'].mean():.1f}")
+                else:
+                    st.info("No device count data available.")
+            else:
+                st.info("No Flow cached data available.")
+        except Exception as e:
+            st.error(f"Failed to load Flow data: {e}")
+    else:
+        st.info("Cache loader not initialized.")
     
     st.markdown("---")
     st.info("💡 **Tip**: Check detailed analysis results in each tab.")
@@ -2760,7 +2806,7 @@ def render_t41_ai_insight_report():
     
     total_workers = 0
     total_records = 0
-    if t41_data is not None:
+    if t41_data is not None and not t41_data.empty:
         total_workers = t41_data['mac'].nunique()
         total_records = len(t41_data)
     
