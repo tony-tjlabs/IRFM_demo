@@ -702,8 +702,13 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
         st.metric("📉 Min", f"{ten_min_avg['avg_device_count'].min():.0f}")
     with col4:
         # 총 누적 unique MAC
-        total_unique = flow_with_loc['mac'].nunique()
-        st.metric("🔢 Total Unique (Daily)", f"{total_unique:,}")
+        if total_unique > 0:
+            st.metric("🔢 Total Unique (Daily)", f"{total_unique:,}")
+        elif flow_with_loc is not None:
+            total_unique = flow_with_loc['mac'].nunique()
+            st.metric("🔢 Total Unique (Daily)", f"{total_unique:,}")
+        else:
+            st.metric("🔢 Total Unique (Daily)", "N/A")
     
     # =========================================================================
     # 2. 빌딩별 인원수 추이
