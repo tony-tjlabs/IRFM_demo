@@ -389,10 +389,18 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     # Hourly summary (2-min aggregation)
     st.subheader("⏰ Hourly Personnel Status (2-min Average)")
     
-    # Show hourly worker count if T41 data exists
-    if 'tward41_data' in st.session_state and st.session_state['tward41_data'] is not None:
-        t41_data = st.session_state['tward41_data']
-        
+    # Show hourly worker count if T41 data exists OR can be loaded
+    t41_data = st.session_state.get('tward41_data')
+    if t41_data is None and selected_dataset.get('t41_records', 0) > 0:
+        # Try loading T41 data for Overview
+        try:
+            t41_data = cache_loader.load_raw_t41()
+            if t41_data is not None and not t41_data.empty:
+                st.session_state['tward41_data'] = t41_data
+        except Exception as e:
+            print(f"Could not load T41 data for overview: {e}")
+    
+    if t41_data is not None and not t41_data.empty:
         # 공통 함수 사용: T41 탭과 동일한 로직
         if 'time' in t41_data.columns:
             # 10분 단위 stats 계산 (공통 함수)
@@ -421,9 +429,17 @@ def render_dashboard_overview(cache_loader, selected_dataset):
                 st.dataframe(hourly_stats[['Hour', 'Active', 'Inactive', 'Total']], use_container_width=True, hide_index=True)
     
     # Flow 데이터가 있으면 시간대별 유동인구 표시
-    if 'flow_data' in st.session_state and st.session_state['flow_data'] is not None:
-        flow_data = st.session_state['flow_data']
-        
+    flow_data = st.session_state.get('flow_data')
+    if flow_data is None and selected_dataset.get('flow_records', 0) > 0:
+        # Try loading Flow data for Overview
+        try:
+            flow_data = cache_loader.load_raw_flow()
+            if flow_data is not None and not flow_data.empty:
+                st.session_state['flow_data'] = flow_data
+        except Exception as e:
+            print(f"Could not load Flow data for overview: {e}")
+    
+    if flow_data is not None and not flow_data.empty:
         if 'time' in flow_data.columns:
             flow_data_copy = flow_data.copy()
             flow_data_copy['time'] = pd.to_datetime(flow_data_copy['time'])
