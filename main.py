@@ -127,7 +127,7 @@ def calculate_t41_worker_stats_10min(t41_data: pd.DataFrame) -> pd.DataFrame:
     mac_bin_activity = bin_signal[['mac', 'time_bin', 'is_active']]
     
     # 10분 bin별 Total (신호가 있는 모든 MAC)
-    bin_total = minute_signal.groupby('time_bin')['mac'].nunique().reset_index()
+    bin_total = bin_signal.groupby('time_bin')['mac'].nunique().reset_index()
     bin_total.columns = ['Time Bin', 'Total']
     
     # 10분 bin별 Active
@@ -675,10 +675,15 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
     ))
     fig_total.update_layout(
         title='전체 디바이스 수 (10분 평균)',
-        xaxis_title='Time',
+        xaxis_title='Time Sequence',
         yaxis_title='Average Device Count',
         height=350,
-        template='plotly_white'
+        template='plotly_white',
+        xaxis=dict(
+            tickmode='linear',
+            tick0=1,
+            dtick=10  # Show every 10th label
+        )
     )
     st.plotly_chart(fig_total, use_container_width=True)
     
