@@ -406,9 +406,52 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     st.markdown("---")
     
     # =========================================================================
-    # T41 Worker Status Chart (Cache-based, same as T41 Overview tab)
+    # T31 Equipment Operation Rate Chart (1-hour aggregation)
     # =========================================================================
-    st.subheader("⏰ T41 Worker Status (10-min intervals)")
+    st.subheader("🔧 T31 Equipment Operation Rate")
+    
+    if cache_loader:
+        try:
+            # Load T31 10-min operation rate
+            t31_ten_min = cache_loader.load_t31_ten_min_operation_rate()
+            
+            if t31_ten_min is not None and not t31_ten_min.empty:
+                # Convert to hourly average
+                if 'bin_index' in t31_ten_min.columns:
+                    t31_ten_min['hour'] = t31_ten_min['bin_index'] // 6
+                elif 'ten_min_bin' in t31_ten_min.columns:
+                    t31_ten_min['hour'] = t31_ten_min['ten_min_bin'] // 6
+                
+                t31_hourly = t31_ten_min.groupby('hour')['operation_rate'].mean().reset_index()
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("#### 🔧 T31 Equipment Operation Rate")
+                    import matplotlib.pyplot as plt
+                    fig, ax = plt.subplots(figsize=(10, 4))
+                    ax.bar(t31_hourly['hour'], t31_hourly['operation_rate'], color='#FF9800')
+                    ax.set_xlabel('Hour')
+                    ax.set_ylabel('Operation Rate (%)')
+                    ax.set_title('T31 Equipment Operation Rate by Hour')
+                    ax.set_xticks(range(0, 24))
+                    ax.set_ylim(0, 100)
+                    st.pyplot(fig)
+                    plt.close()
+                
+                with col2:
+                    st.dataframe(t31_hourly.rename(columns={'hour': 'Hour', 'operation_rate': 'Operation Rate (%)'}), 
+                               use_container_width=True, hide_index=True)
+            else:
+                st.info("No T31 cached data available.")
+        except Exception as e:
+            st.error(f"Failed to load T31 data: {e}")
+    else:
+        st.info("Cache loader not initialized.")
+    
+    # =========================================================================
+    # T41 Worker Status Chart (1-hour aggregation)
+    # =========================================================================
+    st.subheader("👷 T41 Worker Status")
     
     cache_loader = st.session_state.get('cache_loader')
     
@@ -447,13 +490,13 @@ def render_dashboard_overview(cache_loader, selected_dataset):
         st.info("Cache loader not initialized.")
     
     # =========================================================================
-    # Flow Device Counting Chart (Cache-based, same as Device Counting tab)
+    # MobilePhone Device Counting Chart (1-hour aggregation)
     # =========================================================================
-    st.subheader("📱 MobilePhone Device Counting (10-min avg)")
+    st.subheader("📱 MobilePhone Device Counting")
     
     if cache_loader:
         try:
-            # Load cached flow data (same as Device Counting tab)
+            # Load cached flow data
             two_min_counts = cache_loader.load_flow_two_min_unique()
             
             if not two_min_counts.empty:
@@ -461,56 +504,34 @@ def render_dashboard_overview(cache_loader, selected_dataset):
                 if 'count' in two_min_counts.columns:
                     two_min_counts = two_min_counts.rename(columns={'count': 'device_count'})
                 elif 'device_count' not in two_min_counts.columns:
-                    # If neither exists, use the first numeric column
                     numeric_cols = two_min_counts.select_dtypes(include=['int64', 'float64']).columns
                     if len(numeric_cols) > 0:
                         two_min_counts['device_count'] = two_min_counts[numeric_cols[0]]
                 
                 if 'device_count' in two_min_counts.columns:
-                    # 10분 평균 계산 (two_min_bin을 정수로 변환)
+                    # Convert to hourly average
                     two_min_counts['two_min_bin'] = pd.to_numeric(two_min_counts['two_min_bin'], errors='coerce').fillna(0).astype(int)
-                    two_min_counts['ten_min_bin'] = two_min_counts['two_min_bin'] // 5
-                    ten_min_avg = two_min_counts.groupby('ten_min_bin')['device_count'].mean().reset_index()
-                    ten_min_avg.columns = ['ten_min_bin', 'avg_device_count']
+                    two_min_counts['hour'] = two_min_counts['two_min_bin'] // 30
+                    hourly_avg = two_min_counts.groupby('hour')['device_count'].mean().reset_index()
+                    hourly_avg.columns = ['hour', 'avg_device_count']
                     
-                    # Visualization (same as Device Counting tab)
+                    # Visualization
                     col1, col2 = st.columns(2)
                     with col1:
-                        import plotly.graph_objects as go
-                        # x축을 0, 1, 2, ... 형태로 단순화
-                        ten_min_avg['time_label'] = ten_min_avg['ten_min_bin'].astype(str)
-                        
-                        fig_total = go.Figure()
-                        fig_total.add_trace(go.Scatter(
-                            x=ten_min_avg['time_label'],
-                            y=ten_min_avg['avg_device_count'],
-                            mode='lines+markers',
-                            name='Total Devices',
-                            line=dict(color='#1f77b4', width=3),
-                            marker=dict(size=8)
-                        ))
-                        fig_total.update_layout(
-                            title='Device Count (10-min avg)',
-                            xaxis_title='Time Sequence',
-                            yaxis_title='Average Device Count',
-                            height=350,
-                            template='plotly_white',
-                            xaxis=dict(
-                                tickmode='linear',
-                                tick0=0,
-                                dtick=10
-                            )
-                        )
-                        st.plotly_chart(fig_total, use_container_width=True)
+                        st.markdown("#### 📱 MobilePhone Device Count")
+                        import matplotlib.pyplot as plt
+                        fig, ax = plt.subplots(figsize=(10, 4))
+                        ax.bar(hourly_avg['hour'], hourly_avg['avg_device_count'], color='#2196F3')
+                        ax.set_xlabel('Hour')
+                        ax.set_ylabel('Average Device Count')
+                        ax.set_title('MobilePhone Device Count by Hour')
+                        ax.set_xticks(range(0, 24))
+                        st.pyplot(fig)
+                        plt.close()
                     
                     with col2:
-                        st.markdown("#### 📊 Statistics")
-                        col_a, col_b = st.columns(2)
-                        with col_a:
-                            st.metric("📱 Peak", f"{ten_min_avg['avg_device_count'].max():.0f}")
-                            st.metric("📉 Min", f"{ten_min_avg['avg_device_count'].min():.0f}")
-                        with col_b:
-                            st.metric("📊 Average", f"{ten_min_avg['avg_device_count'].mean():.1f}")
+                        st.dataframe(hourly_avg.rename(columns={'hour': 'Hour', 'avg_device_count': 'Avg Count'}), 
+                                   use_container_width=True, hide_index=True)
                 else:
                     st.info("No device count data available.")
             else:
@@ -729,29 +750,30 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
     # =========================================================================
     st.markdown("### 📈 Total Device Count Trend")
     
-    # 차트
-    # x축을 0, 1, 2, ... 형태로 단순화
-    ten_min_avg['simple_label'] = ten_min_avg['ten_min_bin'].astype(str)
+    # 차트 - x축을 시간(0-23)으로 변경
+    ten_min_avg['hour'] = ten_min_avg['ten_min_bin'] // 6
+    hourly_avg_plot = ten_min_avg.groupby('hour')['avg_device_count'].mean().reset_index()
     
     fig_total = go.Figure()
     fig_total.add_trace(go.Scatter(
-        x=ten_min_avg['simple_label'],
-        y=ten_min_avg['avg_device_count'],
+        x=hourly_avg_plot['hour'],
+        y=hourly_avg_plot['avg_device_count'],
         mode='lines+markers',
         name='Total Devices',
         line=dict(color='#1f77b4', width=3),
         marker=dict(size=8)
     ))
     fig_total.update_layout(
-        title='전체 디바이스 수 (10분 평균)',
-        xaxis_title='Time Sequence',
+        title='전체 디바이스 수 (시간별 평균)',
+        xaxis_title='Hour',
         yaxis_title='Average Device Count',
         height=350,
         template='plotly_white',
         xaxis=dict(
             tickmode='linear',
             tick0=0,
-            dtick=10  # Show every 10th label
+            dtick=1,
+            range=[-0.5, 23.5]
         )
     )
     st.plotly_chart(fig_total, use_container_width=True)
@@ -1229,12 +1251,13 @@ def _render_apple_vs_android_tab(flow_data, cache_loader=None):
             hovertemplate='%{label}: %{value:,}<extra></extra>'
         )])
         fig_pie.update_layout(
-            title='Device Type Distribution',
+            title=dict(text='Device Type Distribution', font=dict(color='black')),
             height=350,
             showlegend=True,
             paper_bgcolor='white',
             plot_bgcolor='white',
-            font=dict(color='black')
+            font=dict(color='black'),
+            legend=dict(font=dict(color='black'))
         )
         st.plotly_chart(fig_pie, use_container_width=True)
     

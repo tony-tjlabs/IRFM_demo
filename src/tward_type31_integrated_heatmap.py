@@ -369,21 +369,21 @@ def display_integrated_operation_heatmap(heatmap_result):
         
         print("✅ 모든 히트맵 그룹 표시 완료")
         
-        # 색상 범례
-        st.write("**🎨 Color Legend:**")
-        legend_col1, legend_col2 = st.columns(2)
-        
-        with legend_col1:
-            st.write("- **Black**: No Signal")
-            st.write("- **Gray**: Inactive")
-            st.write("- **Green**: WWT-1F")
-            st.write("- **Yellow**: WWT-B1F")
-        
-        with legend_col2:
-            st.write("- **Orange**: FAB-1F")  
-            st.write("- **Blue**: CUB-1F")
-            st.write("- **Sky Blue**: CUB-B1F")
-            st.write("- **Purple**: Cluster-1F")
+        # 색상 범례 (Journey Heatmap 스타일 - 흰색 박스 안에 표시)
+        st.markdown("#### 🎨 Color Legend")
+        legend_html = """
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+            <span style="display: inline-flex; align-items: center; gap: 5px; color: #000;"><span style="display: inline-block; width: 16px; height: 16px; background: #000000; border: 1px solid #333;"></span> <b>No Signal</b></span>
+            <span style="display: inline-flex; align-items: center; gap: 5px; color: #000;"><span style="display: inline-block; width: 16px; height: 16px; background: #808080; border: 1px solid #333;"></span> <b>Inactive</b></span>
+            <span style="display: inline-flex; align-items: center; gap: 5px; color: #000;"><span style="display: inline-block; width: 16px; height: 16px; background: #00FF00; border: 1px solid #333;"></span> <b>WWT-1F</b></span>
+            <span style="display: inline-flex; align-items: center; gap: 5px; color: #000;"><span style="display: inline-block; width: 16px; height: 16px; background: #FFFF00; border: 1px solid #333;"></span> <b>WWT-B1F</b></span>
+            <span style="display: inline-flex; align-items: center; gap: 5px; color: #000;"><span style="display: inline-block; width: 16px; height: 16px; background: #FFA500; border: 1px solid #333;"></span> <b>FAB</b></span>
+            <span style="display: inline-flex; align-items: center; gap: 5px; color: #000;"><span style="display: inline-block; width: 16px; height: 16px; background: #0000FF; border: 1px solid #333;"></span> <b>CUB-1F</b></span>
+            <span style="display: inline-flex; align-items: center; gap: 5px; color: #000;"><span style="display: inline-block; width: 16px; height: 16px; background: #87CEEB; border: 1px solid #333;"></span> <b>CUB-B1F</b></span>
+            <span style="display: inline-flex; align-items: center; gap: 5px; color: #000;"><span style="display: inline-block; width: 16px; height: 16px; background: #8A2BE2; border: 1px solid #333;"></span> <b>Cluster</b></span>
+        </div>
+        """
+        st.markdown(legend_html, unsafe_allow_html=True)
         
         # 데이터 다운로드
         if st.checkbox("📊 Show Detailed Data"):
