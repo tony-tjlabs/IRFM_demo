@@ -213,32 +213,8 @@ def render_dashboard_mode():
     # 사용 가능한 데이터셋 찾기
     datasets = find_available_datasets()
     
-    # 디버그: 데이터셋 정보 표시
-    with st.sidebar.expander("📊 Dataset Debug", expanded=False):
-        st.text(f"Found {len(datasets)} dataset(s)")
-        for ds in datasets:
-            st.text(f"  - {ds.get('name')}: T31={ds.get('t31_records')}, T41={ds.get('t41_records')}")
-    
-    # 디버그: 데이터셋 정보 표시
-    with st.sidebar.expander("📊 Dataset Debug", expanded=False):
-        st.text(f"Found {len(datasets)} dataset(s)")
-        for ds in datasets:
-            st.text(f"  - {ds.get('name')}: T31={ds.get('t31_records')}, T41={ds.get('t41_records')}")
-    
     if not datasets:
         st.warning("⚠️ No pre-processed datasets available.")
-        
-        # Debug info for Streamlit Cloud
-        import os
-        from pathlib import Path
-        st.expander("🔍 Debug Info (for troubleshooting)", expanded=False).write({
-            "cwd": os.getcwd(),
-            "cwd_contents": os.listdir(os.getcwd()) if os.path.exists(os.getcwd()) else "N/A",
-            "__file__": __file__ if "__file__" in dir() else "N/A",
-            "Datafile_exists": os.path.exists("Datafile"),
-            "Datafile_Rawdata_exists": os.path.exists("Datafile/Rawdata"),
-        })
-        
         st.info("""
         **How to prepare data:**
         1. Run `python precompute.py <data_folder>` in terminal
@@ -277,83 +253,66 @@ def render_dashboard_mode():
         st.error("Cache data is invalid. Please run precompute.py again.")
         return
     
-    # 분석 결과 데이터를 session_state에 로드 (raw 파일 없이도 작동)
-    # T31 분석 결과 확인 및 로드
-    try:
-        t31_results = cache_loader.load_t31_hourly_activity()
-        if len(t31_results) > 0:
+    # 캐시된 분석 결과를 session_state에 로드 (raw 파일 없이도 동작)
+    dataset_changed = st.session_state.get('_dashboard_dataset') != selected_name
+    
+    # T31 데이터 로드 (캐시 우선, raw fallback)
+    if 'tward31_data' not in st.session_state or dataset_changed:
+        # 캐시된 분석 결과 사용 (activity_analysis 형태)
+        t31_hourly = cache_loader.load_t31_hourly_activity()
+        if len(t31_hourly) > 0:
+            st.session_state['tward31_data'] = t31_hourly
             st.session_state['t31_results_available'] = True
-            st.session_state['tward31_data'] = t31_results  # 탭에서 사용할 데이터
-            st.session_state['cache_loader'] = cache_loader  # 캐시 로더 저장
-            st.sidebar.success(f"✅ T31: {len(t31_results)} rows loaded")
         else:
-            st.session_state['t31_results_available'] = False
             st.session_state['tward31_data'] = None
-            st.sidebar.warning("⚠️ T31: 0 rows")
-    except Exception as e:
-        st.session_state['t31_results_available'] = False
-        st.session_state['tward31_data'] = None
-        st.sidebar.error(f"❌ T31 error: {str(e)[:50]}")
+            st.session_state['t31_results_available'] = False
     
-    # T41 분석 결과 확인 및 로드  
-    try:
-        t41_results = cache_loader.load_t41_activity_analysis()
-        if len(t41_results) > 0:
+    # T41 데이터 로드
+    if 'tward41_data' not in st.session_state or dataset_changed:
+        # 캐시된 activity_analysis 사용 (minute_bin, activity_status 포함)
+        t41_activity = cache_loader.load_t41_activity_analysis()
+        if len(t41_activity) > 0:
+            st.session_state['tward41_data'] = t41_activity
+            st.session_state['type41_activity_analysis'] = t41_activity
             st.session_state['t41_results_available'] = True
-            st.session_state['tward41_data'] = t41_results  # 탭에서 사용할 데이터
-            st.session_state['type41_activity_analysis'] = t41_results
-            st.sidebar.success(f"✅ T41: {len(t41_results)} rows loaded")
-            # Journey Heatmap precomputed 데이터 로드
-            journey_heatmap = cache_loader.load_t41_journey_heatmap()
-            if len(journey_heatmap) > 0:
-                st.session_state['type41_journey_heatmap'] = journey_heatmap
         else:
-            st.session_state['t41_results_available'] = False
             st.session_state['tward41_data'] = None
-            st.sidebar.warning("⚠️ T41: 0 rows")
-    except Exception as e:
-        st.session_state['t41_results_available'] = False
-        st.session_state['tward41_data'] = None
-        st.sidebar.error(f"❌ T41 error: {str(e)[:50]}")
+            st.session_state['t41_results_available'] = False
+        
+        # Journey Heatmap precomputed 데이터 로드
+        journey_heatmap = cache_loader.load_t41_journey_heatmap()
+        if len(journey_heatmap) > 0:
+            st.session_state['type41_journey_heatmap'] = journey_heatmap
     
-    # Flow 분석 결과 확인 및 로드
-    try:
-        flow_results = cache_loader.load_flow_hourly()
-        if len(flow_results) > 0:
+    # Flow 데이터 로드
+    if 'flow_data' not in st.session_state or dataset_changed:
+        flow_hourly = cache_loader.load_flow_hourly()
+        if len(flow_hourly) > 0:
+            st.session_state['flow_data'] = flow_hourly
             st.session_state['flow_results_available'] = True
-            st.session_state['flow_data'] = flow_results  # 탭에서 사용할 데이터
-            st.sidebar.success(f"✅ Flow: {len(flow_results)} rows loaded")
         else:
-            st.session_state['flow_results_available'] = False
             st.session_state['flow_data'] = None
-    except Exception as e:
-        st.session_state['flow_results_available'] = False
-        st.session_state['flow_data'] = None
-        st.sidebar.warning(f"⚠️ Flow: {str(e)[:30]}")
+            st.session_state['flow_results_available'] = False
     
-    # Sward config 로드 (캐시에서)
-    try:
+    # S-Ward Config 로드 (이건 raw_sward_config.parquet 사용)
+    if 'sward_config' not in st.session_state or dataset_changed:
         sward_config = cache_loader.load_raw_sward_config()
-        if sward_config is not None and len(sward_config) > 0:
+        if len(sward_config) > 0:
             st.session_state['sward_config'] = sward_config
-            st.sidebar.success(f"✅ S-Ward config: {len(sward_config)} rows")
+            # building/level 목록 설정
+            if 'building' in sward_config.columns:
+                st.session_state['buildings'] = sward_config['building'].unique().tolist()
+                if st.session_state['buildings']:
+                    first_building = st.session_state['buildings'][0]
+                    st.session_state['building'] = first_building
+                    st.session_state['_last_building'] = first_building
+                    levels = sward_config[sward_config['building'] == first_building]['level'].unique().tolist()
+                    st.session_state['levels'] = levels
+                    if levels:
+                        st.session_state['level'] = levels[0]
+                        st.session_state['_last_level'] = levels[0]
         else:
             st.session_state['sward_config'] = None
-    except:
-        st.session_state['sward_config'] = None
-    
-    # Metadata에서 building 정보 로드
-    try:
-        metadata = cache_loader.get_metadata()
-        if metadata:
-            # building/level 목록 설정
-            buildings = metadata.get('buildings', [])
-            if buildings:
-                st.session_state['buildings'] = buildings
-                st.session_state['building'] = buildings[0]
-                st.session_state['_last_building'] = buildings[0]
-    except:
-        pass
     
     # 현재 데이터셋 기록
     st.session_state['_dashboard_dataset'] = selected_name
@@ -371,18 +330,6 @@ def render_dashboard_mode():
         "👷 T-Ward Type 41", 
         "📱 MobilePhone"
     ])
-    
-    # 디버그: session_state 상태 확인
-    with st.sidebar.expander("🔧 Session Debug", expanded=False):
-        st.text(f"t31_results_available: {st.session_state.get('t31_results_available', 'NOT SET')}")
-        st.text(f"t41_results_available: {st.session_state.get('t41_results_available', 'NOT SET')}")
-        st.text(f"flow_results_available: {st.session_state.get('flow_results_available', 'NOT SET')}")
-    
-    # 디버그: session_state 상태 확인
-    with st.sidebar.expander("🔧 Session Debug", expanded=False):
-        st.text(f"t31_results_available: {st.session_state.get('t31_results_available', 'NOT SET')}")
-        st.text(f"t41_results_available: {st.session_state.get('t41_results_available', 'NOT SET')}")
-        st.text(f"flow_results_available: {st.session_state.get('flow_results_available', 'NOT SET')}")
     
     with main_tabs[0]:  # Overview
         render_dashboard_overview(cache_loader, selected_dataset)
@@ -472,12 +419,48 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     if 'tward41_data' in st.session_state and st.session_state['tward41_data'] is not None:
         t41_data = st.session_state['tward41_data']
         
-        # 공통 함수 사용: T41 탭과 동일한 로직
-        if 'time' in t41_data.columns:
-            # 10분 단위 stats 계산 (공통 함수)
-            bin_stats_10min = calculate_t41_worker_stats_10min(t41_data)
+        # 캐시 포맷 체크: minute_bin 컬럼이 있으면 캐시 데이터
+        is_t41_cached = 'minute_bin' in t41_data.columns and 'time' not in t41_data.columns
+        
+        if is_t41_cached:
+            # 캐시된 데이터: minute_bin에서 hour 추출하여 집계
+            t41_copy = t41_data.copy()
+            t41_copy['minute_bin'] = pd.to_datetime(t41_copy['minute_bin'])
+            t41_copy['hour'] = t41_copy['minute_bin'].dt.hour
             
-            # 시간대별 집계 (피크 값 사용)
+            # 시간대별 Active/Inactive 집계
+            hourly_stats = t41_copy.groupby(['hour', 'activity_status'])['mac'].nunique().unstack(fill_value=0).reset_index()
+            hourly_stats.columns.name = None
+            hourly_stats = hourly_stats.rename(columns={'hour': 'Hour'})
+            
+            # Active/Inactive 컬럼 확인
+            if 'Active' not in hourly_stats.columns:
+                hourly_stats['Active'] = 0
+            if 'Inactive' not in hourly_stats.columns:
+                hourly_stats['Inactive'] = 0
+            hourly_stats['Total'] = hourly_stats['Active'] + hourly_stats['Inactive']
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("#### 👷 T41 Worker Status (Active/Inactive)")
+                import matplotlib.pyplot as plt
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.bar(hourly_stats['Hour'], hourly_stats['Active'], color='#4CAF50', label='Active (≥2 signals/min)')
+                ax.bar(hourly_stats['Hour'], hourly_stats['Inactive'], bottom=hourly_stats['Active'], color='#BDBDBD', label='Inactive')
+                ax.set_xlabel('Hour')
+                ax.set_ylabel('Workers')
+                ax.set_title('T41 Workers by Hour (Active/Inactive)')
+                ax.set_xticks(range(0, 24))
+                ax.legend(loc='upper right')
+                st.pyplot(fig)
+                plt.close()
+            
+            with col2:
+                st.dataframe(hourly_stats[['Hour', 'Active', 'Inactive', 'Total']], use_container_width=True, hide_index=True)
+        
+        elif 'time' in t41_data.columns:
+            # 원본 데이터: 기존 로직
+            bin_stats_10min = calculate_t41_worker_stats_10min(t41_data)
             hourly_stats = calculate_t41_hourly_stats(bin_stats_10min)
             
             col1, col2 = st.columns(2)
@@ -485,7 +468,6 @@ def render_dashboard_overview(cache_loader, selected_dataset):
                 st.markdown("#### 👷 T41 Worker Status (Active/Inactive)")
                 import matplotlib.pyplot as plt
                 fig, ax = plt.subplots(figsize=(10, 4))
-                # 스택 막대그래프: 아래=Active(초록), 위=Inactive(회색)
                 ax.bar(hourly_stats['Hour'], hourly_stats['Active'], color='#4CAF50', label='Active (≥2 signals/min)')
                 ax.bar(hourly_stats['Hour'], hourly_stats['Inactive'], bottom=hourly_stats['Active'], color='#BDBDBD', label='Inactive')
                 ax.set_xlabel('Hour')
@@ -503,15 +485,30 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     if 'flow_data' in st.session_state and st.session_state['flow_data'] is not None:
         flow_data = st.session_state['flow_data']
         
-        # 캐시 형식 확인 (hour, unique_devices 컬럼)
-        is_cached_flow = 'hour' in flow_data.columns and 'unique_devices' in flow_data.columns
+        # 캐시 포맷 체크: hour, unique_devices 컬럼이 있으면 캐시 데이터
+        is_flow_cached = 'hour' in flow_data.columns and 'unique_devices' in flow_data.columns
         
-        if is_cached_flow:
-            # 캐시 데이터: 시간대별 평균 계산 (여러 날짜가 있을 수 있음)
+        if is_flow_cached:
+            # 캐시된 데이터: 이미 시간대별 집계됨
             hourly_avg = flow_data.groupby('hour')['unique_devices'].mean().reset_index()
             hourly_avg.columns = ['Hour', 'Avg Devices (2min basis)']
             
             st.markdown("#### 📱 MobilePhone Traffic Status")
+            col1, col2 = st.columns(2)
+            with col1:
+                import matplotlib.pyplot as plt
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.bar(hourly_avg['Hour'], hourly_avg['Avg Devices (2min basis)'], color='#2196F3')
+                ax.set_xlabel('Hour')
+                ax.set_ylabel('Average Devices')
+                ax.set_title('MobilePhone Devices by Hour')
+                ax.set_xticks(range(0, 24))
+                st.pyplot(fig)
+                plt.close()
+            
+            with col2:
+                st.dataframe(hourly_avg, use_container_width=True)
+        
         elif 'time' in flow_data.columns:
             flow_data_copy = flow_data.copy()
             flow_data_copy['time'] = pd.to_datetime(flow_data_copy['time'])
@@ -527,11 +524,6 @@ def render_dashboard_overview(cache_loader, selected_dataset):
             hourly_avg.columns = ['Hour', 'Avg Devices (2min basis)']
             
             st.markdown("#### 📱 MobilePhone Traffic Status")
-        else:
-            hourly_avg = None
-            
-        if hourly_avg is not None:
-            st.markdown("#### 📱 MobilePhone Traffic Status (continued)")
             col1, col2 = st.columns(2)
             with col1:
                 import matplotlib.pyplot as plt
@@ -664,59 +656,7 @@ def _render_device_counting_tab(flow_data, sward_config):
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     
-    st.subheader("📊 Device Counting (시간대별 디바이스 수)")
-    
-    # 캐시된 데이터 포맷 체크 (date, hour, unique_devices 컬럼)
-    is_cached_format = 'time' not in flow_data.columns and 'hour' in flow_data.columns
-    
-    if is_cached_format:
-        # 캐시된 집계 데이터 사용
-        st.info("📊 시간대별 집계 데이터를 표시합니다.")
-        
-        flow_hourly = flow_data.copy()
-        if 'date' in flow_hourly.columns:
-            flow_hourly['date'] = pd.to_datetime(flow_hourly['date'])
-        
-        # 시간대별 unique_devices 차트
-        hourly_stats = flow_hourly.groupby('hour')['unique_devices'].mean().reset_index()
-        hourly_stats['time_label'] = hourly_stats['hour'].apply(lambda x: f"{x:02d}:00")
-        
-        fig_total = go.Figure()
-        fig_total.add_trace(go.Scatter(
-            x=hourly_stats['time_label'],
-            y=hourly_stats['unique_devices'],
-            mode='lines+markers',
-            name='Unique Devices',
-            line=dict(color='#1f77b4', width=3),
-            marker=dict(size=8)
-        ))
-        fig_total.update_layout(
-            title='시간대별 평균 디바이스 수',
-            xaxis_title='Hour',
-            yaxis_title='Unique Devices',
-            height=350,
-            template='plotly_white'
-        )
-        st.plotly_chart(fig_total, use_container_width=True)
-        
-        # 메트릭
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("📱 Peak", f"{hourly_stats['unique_devices'].max():.0f}")
-        with col2:
-            st.metric("�� Average", f"{hourly_stats['unique_devices'].mean():.1f}")
-        with col3:
-            st.metric("📉 Min", f"{hourly_stats['unique_devices'].min():.0f}")
-        with col4:
-            st.metric("🔢 Total (Daily Avg)", f"{hourly_stats['unique_devices'].sum():.0f}")
-        
-        # 데이터 테이블
-        st.markdown("---")
-        st.markdown("### �� 시간대별 상세 데이터")
-        st.dataframe(flow_hourly, use_container_width=True)
-        return
-    
-    # 원본 데이터 로직 (time, mac, sward_id 컬럼 필요)
+    st.subheader("📊 Device Counting (2분 unique MAC → 10분 평균)")
     st.info("**방법론**: 2분 단위로 고유 MAC 주소 수를 세고, 10분(5개 구간) 단위로 평균")
     
     # 데이터 전처리
@@ -917,17 +857,8 @@ def _render_tward_vs_mobile_tab(flow_data, sward_config):
         st.warning("T41 데이터가 없어 비교할 수 없습니다.")
         return
     
-    # 캐시 포맷 체크: building 컬럼이 이미 있으면 merge 불필요
-    is_t41_cached = 'building' in t41_data.columns and 'sward_id' not in t41_data.columns
-    is_flow_cached = 'time' not in flow_data.columns and 'hour' in flow_data.columns
-    
     # Building 목록 가져오기
-    if is_t41_cached:
-        # 캐시된 데이터: building 컬럼 이미 있음
-        t41_with_loc = t41_data.copy()
-        buildings = t41_with_loc['building'].dropna().unique().tolist()
-        buildings = sorted([b for b in buildings if str(b) != 'nan' and str(b) != 'Unknown'])
-    elif sward_config is not None and 'sward_id' in t41_data.columns:
+    if sward_config is not None:
         t41_with_loc = t41_data.merge(
             sward_config[['sward_id', 'building', 'level']],
             on='sward_id',
@@ -936,9 +867,6 @@ def _render_tward_vs_mobile_tab(flow_data, sward_config):
         buildings = t41_with_loc['building'].dropna().unique().tolist()
         buildings = sorted([b for b in buildings if str(b) != 'nan'])
     else:
-        t41_with_loc = t41_data.copy()
-        t41_with_loc['building'] = 'Unknown'
-        t41_with_loc['level'] = 'Unknown'
         buildings = []
     
     # =========================================================================
@@ -1109,41 +1037,9 @@ def _render_apple_vs_android_tab(flow_data):
     """Apple vs Android 비율 탭"""
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
-    
-    st.subheader("📈 Apple vs Android Device Ratio")
-    
-    # 캐시 포맷 체크
-    is_cached_format = 'time' not in flow_data.columns and 'hour' in flow_data.columns
-    
-    if is_cached_format:
-        # 캐시 데이터는 시간별 unique_devices만 있으므로 Apple/Android 분석 불가
-        st.info("📊 캐시된 집계 데이터에서는 Apple/Android 분류가 불가능합니다.")
-        st.warning("Raw 데이터가 필요합니다. (type 컬럼 필요)")
-        
-        # 시간대별 기본 그래프라도 표시
-        st.markdown("### 📊 시간대별 디바이스 수 (대체 표시)")
-        hourly_stats = flow_data.groupby('hour')['unique_devices'].mean().reset_index()
-        hourly_stats['time_label'] = hourly_stats['hour'].apply(lambda x: f"{x:02d}:00")
-        
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=hourly_stats['time_label'],
-            y=hourly_stats['unique_devices'],
-            name='Unique Devices',
-            marker_color='#1f77b4'
-        ))
-        fig.update_layout(
-            title='시간대별 평균 디바이스 수',
-            xaxis_title='Hour',
-            yaxis_title='Unique Devices',
-            height=350,
-            template='plotly_white'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        return
-    
     from src.flow_analysis import identify_device_type_from_type_column
     
+    st.subheader("📈 Apple vs Android Device Ratio")
     st.info("디바이스 타입별 분포 분석 (type 컬럼: 1=Apple, 10=Android)")
     
     # 데이터 전처리
@@ -1586,42 +1482,27 @@ def render_t31_overview():
     st.subheader("📊 T31 Overview - Equipment Status Summary")
     
     t31_data = st.session_state.get('tward31_data')
-    cache_loader = st.session_state.get('cache_loader')
+    sward_config = st.session_state.get('sward_config')
     
     if t31_data is None or t31_data.empty:
         st.warning("No T31 data available.")
         return
     
-    # 캐시 데이터 형식 확인 (hourly activity: date, hour, active_devices, active_swards, avg_rssi)
-    is_cached_format = 'active_devices' in t31_data.columns
+    # Basic statistics
+    total_equipment = t31_data['mac'].nunique()
+    total_records = len(t31_data)
     
-    if is_cached_format:
-        # 캐시 데이터: 집계된 결과 사용
-        total_equipment = int(t31_data['active_devices'].max()) if 'active_devices' in t31_data.columns else 0
-        total_records = int(t31_data['active_devices'].sum()) if 'active_devices' in t31_data.columns else len(t31_data)
-        total_swards = int(t31_data['active_swards'].max()) if 'active_swards' in t31_data.columns else 0
-        
-        # metadata에서 building 정보 가져오기
-        buildings = []
-        if cache_loader:
-            metadata = cache_loader.get_metadata()
-            buildings = metadata.get('buildings', [])
+    # Join with sward_config for building/level info
+    if sward_config is not None:
+        t31_with_loc = t31_data.merge(
+            sward_config[['sward_id', 'building', 'level']],
+            on='sward_id',
+            how='left'
+        )
+        buildings = t31_with_loc['building'].dropna().unique().tolist()
     else:
-        # 원본 데이터 형식
-        total_equipment = t31_data['mac'].nunique() if 'mac' in t31_data.columns else 0
-        total_records = len(t31_data)
-        total_swards = t31_data['sward_id'].nunique() if 'sward_id' in t31_data.columns else 0
-        
-        sward_config = st.session_state.get('sward_config')
-        if sward_config is not None:
-            t31_with_loc = t31_data.merge(
-                sward_config[['sward_id', 'building', 'level']],
-                on='sward_id',
-                how='left'
-            )
-            buildings = t31_with_loc['building'].dropna().unique().tolist()
-        else:
-            buildings = []
+        t31_with_loc = t31_data
+        buildings = []
     
     # =========================================================================
     # Key Metrics (70% size) - 텍스트 검정색으로 명확히 표시
@@ -1670,18 +1551,7 @@ def render_t31_overview():
     # =========================================================================
     st.markdown("### 🏢 Equipment by Building & Level")
     
-    # 캐시 모드에서는 원본 데이터가 없으므로 다른 방식으로 표시
-    if is_cached_format:
-        # 캐시 모드: metadata에서 가져온 buildings 목록으로 간단히 표시
-        if buildings:
-            building_data = pd.DataFrame({
-                'Building': buildings,
-                'Status': ['Active'] * len(buildings)
-            })
-            st.dataframe(building_data, use_container_width=True)
-        else:
-            st.info("Building information not available in cached data.")
-    elif 'sward_config' in dir() and sward_config is not None and 't31_with_loc' in dir() and 'building' in t31_with_loc.columns:
+    if sward_config is not None and 'building' in t31_with_loc.columns:
         # 각 MAC이 어느 Building/Level에서 가장 많이 감지되었는지 계산
         mac_loc_counts = t31_with_loc.groupby(['mac', 'building', 'level']).size().reset_index(name='signal_count')
         
@@ -1724,7 +1594,7 @@ def render_t31_overview():
     st.markdown("### 📊 Operation Rate by Building & Level")
     st.info("**가동률** = (활성 시간 bins / 전체 시간 bins) × 100% - 24시간 중 장비가 가동된 시간 비율")
     
-    if not is_cached_format and 'sward_config' in dir() and sward_config is not None and 't31_with_loc' in dir() and 'building' in t31_with_loc.columns and 'time' in t31_data.columns:
+    if sward_config is not None and 'building' in t31_with_loc.columns and 'time' in t31_data.columns:
         t31_with_time = t31_with_loc.copy()
         t31_with_time['time'] = pd.to_datetime(t31_with_time['time'])
         t31_with_time['time_bin'] = (t31_with_time['time'].dt.hour * 6 + t31_with_time['time'].dt.minute // 10)
@@ -1852,26 +1722,6 @@ def render_t31_location_analysis():
     
     t31_data = st.session_state.get('tward31_data')
     sward_config = st.session_state.get('sward_config')
-    cache_loader = st.session_state.get('cache_loader')
-    
-    # 캐시 데이터 형식 확인 (sward_id 컬럼이 없으면 캐시 형식)
-    is_cached_format = 'sward_id' not in t31_data.columns if t31_data is not None else True
-    
-    if is_cached_format:
-        st.info("📍 Location Analysis requires raw data. Showing cached location heatmaps instead.")
-        
-        # 캐시된 위치 히트맵 이미지 표시
-        if cache_loader:
-            heatmaps = cache_loader.list_location_heatmaps()
-            if heatmaps:
-                for hm in heatmaps:
-                    st.image(cache_loader.cache_folder / hm['filename'], 
-                             caption=f"{hm['building']} - {hm['level']}")
-            else:
-                st.warning("No cached location heatmaps available.")
-        else:
-            st.warning("Cache loader not available.")
-        return
     
     if t31_data is None or sward_config is None:
         st.warning("T31 data or S-Ward configuration not available.")
@@ -2081,41 +1931,12 @@ def render_t31_operation_heatmap():
         except:
             pass
     
-    # 캐시 데이터 형식 확인
-    is_cached_format = 'active_devices' in t31_data.columns
-    
     if heatmap_cache is not None:
         st.success("✅ Using precomputed heatmap data (fast)")
         _display_t31_heatmap_from_cache(heatmap_cache)
-    elif is_cached_format:
-        # 캐시 모드지만 히트맵 캐시가 없음 - 간단한 대체 표시
-        st.info("📊 Operation Heatmap - Precomputed Summary")
-        
-        # t31_results_operation_heatmap에서 간단한 요약 표시
-        if cache_loader:
-            try:
-                op_heatmap = cache_loader.load_t31_operation_heatmap()
-                if len(op_heatmap) > 0:
-                    st.write(f"**Total records:** {len(op_heatmap):,}")
-                    
-                    # Building/Level별 요약
-                    summary = op_heatmap.groupby(['building', 'level']).agg({
-                        'active_devices': 'sum',
-                        'record_count': 'sum'
-                    }).reset_index()
-                    st.dataframe(summary, use_container_width=True)
-                else:
-                    st.warning("No operation heatmap data available.")
-            except Exception as e:
-                st.warning(f"Could not load operation heatmap: {str(e)[:100]}")
-        else:
-            st.warning("Cache loader not available.")
     else:
-        # 원본 데이터가 있으면 실시간 계산
-        if sward_config is not None:
-            _display_t31_heatmap_realtime(t31_data, sward_config)
-        else:
-            st.warning("S-Ward configuration not available for realtime heatmap.")
+        # 실시간 계산 (캐시가 없거나 형식이 맞지 않음)
+        _display_t31_heatmap_realtime(t31_data, sward_config)
 
 
 def _display_building_level_legend():
@@ -2376,7 +2197,7 @@ def render_t31_ai_insight_report():
     if cache_loader:
         cached_insights = cache_loader.load_ai_insights('t31')
     
-    total_equipment = t31_data['mac'].nunique() if 'mac' in t31_data.columns else (int(t31_data['active_devices'].max()) if 'active_devices' in t31_data.columns else 0)
+    total_equipment = t31_data['mac'].nunique()
     total_records = len(t31_data)
     
     if cached_insights:
@@ -2506,92 +2327,11 @@ def render_t41_overview():
     
     t41_data = st.session_state.get('tward41_data')
     sward_config = st.session_state.get('sward_config')
-    cache_loader = st.session_state.get('cache_loader')
     
     if t41_data is None or t41_data.empty:
         st.warning("No T41 data available.")
         return
     
-    # 캐시 데이터 형식 확인 (activity_analysis: mac, minute_bin, signal_count, building, level, space_type, activity_status)
-    is_cached_format = 'minute_bin' in t41_data.columns and 'activity_status' in t41_data.columns
-    
-    if is_cached_format:
-        # 캐시 데이터: 이미 집계된 결과 사용
-        t41_with_loc = t41_data  # 이미 building, level 포함
-        
-        # 활성 작업자 계산 (activity_status == 'Active')
-        active_data = t41_data[t41_data['activity_status'] == 'Active']
-        active_workers = active_data['mac'].nunique()
-        total_detected = t41_data['mac'].nunique()
-        inactive_workers = total_detected - active_workers
-        
-        total_records = len(t41_data)
-        buildings = t41_data['building'].dropna().unique().tolist() if 'building' in t41_data.columns else []
-        
-        # 메트릭 표시
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.markdown(f"""
-            <div style="font-size: 0.7em; padding: 10px; background: #e8f4ea; border-radius: 5px; color: #000;">
-                <div style="color: #333;">👷 Active Workers</div>
-                <div style="font-size: 1.5em; font-weight: bold; color: #000;">{active_workers:,}</div>
-                <div style="font-size: 0.8em; color: #666;">({inactive_workers:,} inactive helmets)</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown(f"""
-            <div style="font-size: 0.7em; padding: 10px; background: #e8f0fe; border-radius: 5px; color: #000;">
-                <div style="color: #333;">📊 Total Records</div>
-                <div style="font-size: 1.5em; font-weight: bold; color: #000;">{total_records:,}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col3:
-            st.markdown(f"""
-            <div style="font-size: 0.7em; padding: 10px; background: #fef7e0; border-radius: 5px; color: #000;">
-                <div style="color: #333;">🏢 Buildings</div>
-                <div style="font-size: 1.5em; font-weight: bold; color: #000;">{len(buildings)}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col4:
-            # 가장 붐비는 빌딩
-            if 'building' in active_data.columns and not active_data.empty:
-                busiest = active_data.groupby('building')['mac'].nunique().idxmax()
-                busiest_count = active_data.groupby('building')['mac'].nunique().max()
-            else:
-                busiest = "N/A"
-                busiest_count = 0
-            st.markdown(f"""
-            <div style="font-size: 0.7em; padding: 10px; background: #fce8e6; border-radius: 5px; color: #000;">
-                <div style="color: #333;">🔥 Busiest Building</div>
-                <div style="font-size: 1.2em; font-weight: bold; color: #000;">{busiest}</div>
-                <div style="font-size: 0.8em; color: #666;">{busiest_count} workers</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        # 시간대별 작업자 분포
-        st.markdown("### ⏰ Hourly Active Worker Distribution")
-        t41_data['hour'] = pd.to_datetime(t41_data['minute_bin']).dt.hour
-        hourly_workers = t41_data[t41_data['activity_status'] == 'Active'].groupby('hour')['mac'].nunique().reset_index()
-        hourly_workers.columns = ['Hour', 'Active Workers']
-        
-        import plotly.express as px
-        fig = px.bar(hourly_workers, x='Hour', y='Active Workers', 
-                     title='Active Workers by Hour',
-                     color='Active Workers', color_continuous_scale='Blues')
-        fig.update_layout(height=300)
-        st.plotly_chart(fig, use_container_width=True)
-        
-        return  # 캐시 모드에서는 여기서 종료
-    
-    # =========================================================================
-    # 원본 데이터 형식 처리
-    # =========================================================================
     # Join with sward_config for building/level info
     if sward_config is not None:
         t41_with_loc = t41_data.merge(
@@ -2605,86 +2345,6 @@ def render_t41_overview():
     # =========================================================================
     # 활성/비활성 작업자 분리 (1분에 2회 이상 = 활성)
     # =========================================================================
-    # 캐시 데이터 형식 확인
-    is_cached_format = 'minute_bin' in t41_data.columns and 'activity_status' in t41_data.columns
-    
-    if is_cached_format:
-        # 캐시 데이터: 이미 집계된 결과 사용
-        active_data = t41_data[t41_data['activity_status'] == 'Active']
-        active_workers = active_data['mac'].nunique()
-        total_detected = t41_data['mac'].nunique()
-        inactive_workers = total_detected - active_workers
-        total_records = len(t41_data)
-        buildings = t41_data['building'].dropna().unique().tolist() if 'building' in t41_data.columns else []
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("👷 Active Workers", f"{active_workers:,}", f"{inactive_workers:,} inactive")
-        with col2:
-            st.metric("📊 Total Records", f"{total_records:,}")
-        with col3:
-            st.metric("🏢 Buildings", len(buildings))
-        with col4:
-            if 'building' in active_data.columns and not active_data.empty:
-                busiest = active_data.groupby('building')['mac'].nunique().idxmax()
-            else:
-                busiest = "N/A"
-            st.metric("🔥 Busiest", busiest)
-        
-        st.markdown("---")
-        st.markdown("### ⏰ Hourly Active Worker Distribution")
-        t41_data_copy = t41_data.copy()
-        t41_data_copy['hour'] = pd.to_datetime(t41_data_copy['minute_bin']).dt.hour
-        hourly = t41_data_copy[t41_data_copy['activity_status'] == 'Active'].groupby('hour')['mac'].nunique().reset_index()
-        hourly.columns = ['Hour', 'Active Workers']
-        
-        import plotly.express as px
-        fig = px.bar(hourly, x='Hour', y='Active Workers', title='Active Workers by Hour')
-        fig.update_layout(height=300)
-        st.plotly_chart(fig, use_container_width=True)
-        return
-    
-    # 원본 데이터 형식 처리
-    # 캐시 데이터 형식 확인
-    is_cached_format = 'minute_bin' in t41_data.columns and 'activity_status' in t41_data.columns
-    
-    if is_cached_format:
-        # 캐시 데이터: 이미 집계된 결과 사용
-        active_data = t41_data[t41_data['activity_status'] == 'Active']
-        active_workers = active_data['mac'].nunique()
-        total_detected = t41_data['mac'].nunique()
-        inactive_workers = total_detected - active_workers
-        total_records = len(t41_data)
-        buildings = t41_data['building'].dropna().unique().tolist() if 'building' in t41_data.columns else []
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("👷 Active Workers", f"{active_workers:,}", f"{inactive_workers:,} inactive")
-        with col2:
-            st.metric("📊 Total Records", f"{total_records:,}")
-        with col3:
-            st.metric("🏢 Buildings", len(buildings))
-        with col4:
-            if 'building' in active_data.columns and not active_data.empty:
-                busiest = active_data.groupby('building')['mac'].nunique().idxmax()
-            else:
-                busiest = "N/A"
-            st.metric("🔥 Busiest", busiest)
-        
-        st.markdown("---")
-        st.markdown("### ⏰ Hourly Active Worker Distribution")
-        t41_data_copy = t41_data.copy()
-        t41_data_copy['hour'] = pd.to_datetime(t41_data_copy['minute_bin']).dt.hour
-        hourly = t41_data_copy[t41_data_copy['activity_status'] == 'Active'].groupby('hour')['mac'].nunique().reset_index()
-        hourly.columns = ['Hour', 'Active Workers']
-        
-        import plotly.express as px
-        fig = px.bar(hourly, x='Hour', y='Active Workers', title='Active Workers by Hour')
-        fig.update_layout(height=300)
-        st.plotly_chart(fig, use_container_width=True)
-        return
-    
-    # 원본 데이터 형식 처리
     t41_copy = t41_with_loc.copy()
     t41_copy['time'] = pd.to_datetime(t41_copy['time'])
     t41_copy['minute_bin'] = t41_copy['time'].dt.floor('1min')

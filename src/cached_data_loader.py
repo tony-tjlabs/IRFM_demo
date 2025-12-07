@@ -419,8 +419,6 @@ class CachedDataLoader:
         try:
             for f in self.cache_folder.iterdir():
                 if f.name.startswith('location_heatmap_') and f.suffix == '.png':
-                    # 파일명에서 building, level 추출
-                    # 예: location_heatmap_A_1F.png -> building=A, level=1F
                     parts = f.stem.replace('location_heatmap_', '').split('_')
                     if len(parts) >= 2:
                         building = parts[0]
@@ -443,41 +441,19 @@ def find_available_datasets(base_folder: str = None) -> List[Dict]:
     """사용 가능한 데이터셋 (캐시 있는) 목록"""
     import os
     import streamlit as st
+    
     datasets = []
     
-    # 여러 경로 후보 시도 (Streamlit Cloud 호환)
+    # 기본 경로: 여러 후보 경로 시도 (Streamlit Cloud 포함)
     if base_folder is None:
-        path_candidates = []
-        
-        # 1. 현재 파일 기준 상대 경로
         current_file = Path(__file__).resolve()
-        path_candidates.append(current_file.parent.parent / "Datafile" / "Rawdata")
         
-        # 2. 현재 작업 디렉토리 기준
-        cwd = Path(os.getcwd())
-        path_candidates.append(cwd / "Datafile" / "Rawdata")
-        
-        # 3. Streamlit Cloud 환경 - 여러 케이스 시도
-        path_candidates.append(Path("/mount/src/irfm_demo/Datafile/Rawdata"))
-        path_candidates.append(Path("/mount/src/IRFM_demo/Datafile/Rawdata"))
-        path_candidates.append(Path("/mount/src/irfm-demo/Datafile/Rawdata"))
-        path_candidates.append(Path("/app/Datafile/Rawdata"))
-        
-        # 디버그: 사이드바에 경로 정보 표시
-        debug_info = []
-        for i, candidate in enumerate(path_candidates):
-            try:
-                exists = candidate.exists()
-                debug_info.append(f"{i+1}. {candidate}: {'✅' if exists else '❌'}")
-            except PermissionError:
-                debug_info.append(f"{i+1}. {candidate}: 🚫 Permission denied")
-            except Exception as e:
-                debug_info.append(f"{i+1}. {candidate}: ⚠️ {type(e).__name__}")
-        
-        with st.sidebar.expander("🔍 Path Debug", expanded=False):
-            st.text("\n".join(debug_info))
-            st.text(f"CWD: {os.getcwd()}")
-            st.text(f"__file__: {__file__}")
+        # 경로 후보들 (우선순위 순)
+        path_candidates = [
+            current_file.parent.parent / "Datafile" / "Rawdata",  # 로컬
+            Path("/mount/src/irfm_demo/Datafile/Rawdata"),  # Streamlit Cloud
+            Path(os.getcwd()) / "Datafile" / "Rawdata",  # CWD 기준
+        ]
         
         # 유효한 경로 찾기
         base_path = None
@@ -490,37 +466,33 @@ def find_available_datasets(base_folder: str = None) -> List[Dict]:
                 continue
         
         if base_path is None:
-            st.sidebar.warning("No valid data path found!")
             return datasets
     else:
         base_path = Path(base_folder)
-        try:
-            if not base_path.exists():
-                return datasets
-        except (PermissionError, OSError):
-            return datasets
     
     try:
-        for folder in base_path.iterdir():
-            if folder.is_dir():
-                cache_folder = folder / "cache"
-                metadata_path = cache_folder / "metadata.json"
+        if not base_path.exists():
+            return datasets
+    except (PermissionError, OSError):
+        return datasets
+    
+    for folder in base_path.iterdir():
+        if folder.is_dir():
+            cache_folder = folder / "cache"
+            metadata_path = cache_folder / "metadata.json"
+            
+            if metadata_path.exists():
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
                 
-                if metadata_path.exists():
-                    with open(metadata_path, 'r') as f:
-                        metadata = json.load(f)
-                    
-                    datasets.append({
-                        'name': folder.name,
-                        'path': str(folder),
-                        'cache_path': str(cache_folder),
-                        'created_at': metadata.get('created_at', 'Unknown'),
-                        't31_records': metadata.get('t31_records', 0),
-                        't41_records': metadata.get('t41_records', 0),
-                        'flow_records': metadata.get('flow_records', 0),
-                    })
-    except (PermissionError, OSError) as e:
-        st.sidebar.error(f"Error reading datasets: {e}")
+                datasets.append({
+                    'name': folder.name,
+                    'path': str(folder),
+                    'cache_path': str(cache_folder),
+                    'created_at': metadata.get('created_at', 'Unknown'),
+                    't31_records': metadata.get('t31_records', 0),
+                    't41_records': metadata.get('t41_records', 0),
+                    'flow_records': metadata.get('flow_records', 0),
+                })
     
     return datasets
-
