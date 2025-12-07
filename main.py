@@ -604,7 +604,8 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
             if 'count' in two_min_counts.columns:
                 two_min_counts = two_min_counts.rename(columns={'count': 'device_count'})
             
-            # 10분 평균 계산
+            # 10분 평균 계산 (two_min_bin을 정수로 변환)
+            two_min_counts['two_min_bin'] = pd.to_numeric(two_min_counts['two_min_bin'], errors='coerce').fillna(0).astype(int)
             two_min_counts['ten_min_bin'] = two_min_counts['two_min_bin'] // 5
             ten_min_avg = two_min_counts.groupby('ten_min_bin')['device_count'].mean().reset_index()
             ten_min_avg.columns = ['ten_min_bin', 'avg_device_count']
