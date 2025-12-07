@@ -2352,127 +2352,6 @@ def render_t41_overview():
             
     except Exception as e:
         st.error(f"Error loading chart data: {e}")
-        
-        # =====================================================================
-        # 캐시가 없으면 실시간 계산 (fallback)
-        # =====================================================================
-        if not use_cached:
-            t41_copy = t41_with_loc.copy()
-            t41_copy['time'] = pd.to_datetime(t41_copy['time'])
-            t41_copy['time_bin'] = (t41_copy['time'].dt.hour * 6 + t41_copy['time'].dt.minute // 10)
-            t41_copy['minute_bin'] = t41_copy['time'].dt.floor('1min')
-            
-            # Filter data
-            if selected_building != "All":
-                filtered = t41_copy[t41_copy['building'] == selected_building].copy()
-                if selected_level != "All":
-                    filtered = filtered[filtered['level'] == selected_level].copy()
-            else:
-                filtered = t41_copy.copy()
-            
-            if 'minute_bin' not in filtered.columns:
-                filtered['minute_bin'] = filtered['time'].dt.floor('1min')
-            
-            # 1분 단위 신호 수 계산
-            filtered_minute = filtered.groupby(['mac', 'minute_bin']).size().reset_index(name='signals')
-            filtered_minute['is_active'] = filtered_minute['signals'] >= 2
-            filtered_minute['time_bin'] = (
-                filtered_minute['minute_bin'].dt.hour * 6 + 
-                filtered_minute['minute_bin'].dt.minute // 10
-            )
-            
-            mac_bin_activity = filtered_minute.groupby(['mac', 'time_bin']).agg({
-                'is_active': 'any'
-            }).reset_index()
-            
-            bin_total = filtered_minute.groupby('time_bin')['mac'].nunique().reset_index()
-            bin_total.columns = ['Time Bin', 'Total']
-            
-            bin_active = mac_bin_activity[mac_bin_activity['is_active']].groupby('time_bin')['mac'].nunique().reset_index()
-            bin_active.columns = ['Time Bin', 'Active']
-            
-            bin_inactive = mac_bin_activity[~mac_bin_activity['is_active']].groupby('time_bin')['mac'].nunique().reset_index()
-            bin_inactive.columns = ['Time Bin', 'Inactive']
-            
-            all_bins = pd.DataFrame({'Time Bin': range(144)})
-            bin_stats = all_bins.merge(bin_total, on='Time Bin', how='left').fillna(0)
-            bin_stats = bin_stats.merge(bin_active, on='Time Bin', how='left').fillna(0)
-            bin_stats = bin_stats.merge(bin_inactive, on='Time Bin', how='left').fillna(0)
-            
-            bin_stats['Total'] = bin_stats['Total'].astype(int)
-            bin_stats['Active'] = bin_stats['Active'].astype(int)
-            bin_stats['Inactive'] = bin_stats['Inactive'].astype(int)
-            bin_stats['Time Label'] = bin_stats['Time Bin'].apply(
-                lambda x: f"{x // 6:02d}:{(x % 6) * 10:02d}"
-            )
-        
-        import plotly.graph_objects as go
-        
-        title = f"Worker Count (10-min intervals) - {selected_building}"
-        if selected_level != "All":
-            title += f" {selected_level}"
-        
-        fig = go.Figure()
-        
-        # Total (전체) - 회색 점선
-        fig.add_trace(go.Scatter(
-            x=bin_stats['Time Label'],
-            y=bin_stats['Total'],
-            mode='lines+markers',
-            name='Total',
-            line=dict(color='gray', width=2, dash='dash'),
-            marker=dict(size=4)
-        ))
-        
-        # Active (활성) - 초록색 실선
-        fig.add_trace(go.Scatter(
-            x=bin_stats['Time Label'],
-            y=bin_stats['Active'],
-            mode='lines+markers',
-            name='Active (vibration)',
-            line=dict(color='#00CC00', width=2),
-            marker=dict(size=5),
-            fill='tozeroy',
-            fillcolor='rgba(0, 204, 0, 0.2)'
-        ))
-        
-        # Inactive (비활성) - 주황색 실선
-        fig.add_trace(go.Scatter(
-            x=bin_stats['Time Label'],
-            y=bin_stats['Inactive'],
-            mode='lines+markers',
-            name='Inactive (no vibration)',
-            line=dict(color='#FF8C00', width=2),
-            marker=dict(size=5)
-        ))
-        
-        fig.update_layout(
-            title=title,
-            height=400,
-            xaxis_title='Time',
-            yaxis_title='Worker Count',
-            xaxis=dict(tickangle=45, dtick=6),
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            ),
-            hovermode='x unified'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # 피크 시간 정보
-        if not bin_stats.empty:
-            peak_total_bin = bin_stats.loc[bin_stats['Total'].idxmax()]
-            peak_active_bin = bin_stats.loc[bin_stats['Active'].idxmax()]
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.info(f"📊 **Total Peak**: {int(peak_total_bin['Total'])} workers at {peak_total_bin['Time Label']}")
-            with col2:
-                st.success(f"🏃 **Active Peak**: {int(peak_active_bin['Active'])} workers at {peak_active_bin['Time Label']}")
     
     st.markdown("---")
     
@@ -2483,16 +2362,15 @@ def render_t41_overview():
     
     # Load cached dwell time data if available
     dwell_data = pd.DataFrame()
-    if use_cached:
-        try:
-            # This would ideally come from a specific cache method, 
-            # but for now we might need to rely on what we have or skip if not available
-            # Assuming we can derive it or load it. 
-            # For this refactoring, let's check if we have a loader method for dwell time
-            # Looking at CachedDataLoader, we have load_t41_worker_dwell()
-            dwell_data = loader.load_t41_worker_dwell()
-        except:
-            pass
+    try:
+        # This would ideally come from a specific cache method, 
+        # but for now we might need to rely on what we have or skip if not available
+        # Assuming we can derive it or load it. 
+        # For this refactoring, let's check if we have a loader method for dwell time
+        # Looking at CachedDataLoader, we have load_t41_worker_dwell()
+        dwell_data = loader.load_t41_worker_dwell()
+    except:
+        pass
             
     if not dwell_data.empty:
         # Join with location info if needed, but dwell_data usually has mac and duration
@@ -2531,7 +2409,6 @@ def render_t41_overview():
     - Monitor inactive helmets to ensure they are not abandoned
     - High density in {busiest_building} {busiest_level} suggests active work zone
     """
-    st.info(ai_comment)
     st.info(ai_comment)
 
 
