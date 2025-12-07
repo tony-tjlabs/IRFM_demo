@@ -248,27 +248,40 @@ def render_dashboard_mode():
         return
     
     # 원본 데이터를 session_state에 로드 (기존 분석 기능 사용을 위해)
-    raw_data_status = cache_loader.has_raw_data()
-    
-    if raw_data_status.get('t31', False):
+    # T31 데이터 로드 (레코드가 있으면)
+    if selected_dataset.get('t31_records', 0) > 0:
         if 'tward31_data' not in st.session_state or st.session_state.get('_dashboard_dataset') != selected_name:
-            st.session_state['tward31_data'] = cache_loader.load_raw_t31()
+            try:
+                st.session_state['tward31_data'] = cache_loader.load_raw_t31()
+            except:
+                st.session_state['tward31_data'] = None
     
-    if raw_data_status.get('t41', False):
+    # T41 데이터 로드 (레코드가 있으면)
+    if selected_dataset.get('t41_records', 0) > 0:
         if 'tward41_data' not in st.session_state or st.session_state.get('_dashboard_dataset') != selected_name:
-            st.session_state['tward41_data'] = cache_loader.load_raw_t41()
-            # Journey Heatmap용 activity_analysis 로드
-            activity_analysis = cache_loader.load_t41_activity_analysis()
-            if len(activity_analysis) > 0:
-                st.session_state['type41_activity_analysis'] = activity_analysis
-            # Journey Heatmap precomputed 데이터 로드 (10분 단위, 벡터화)
-            journey_heatmap = cache_loader.load_t41_journey_heatmap()
-            if len(journey_heatmap) > 0:
-                st.session_state['type41_journey_heatmap'] = journey_heatmap
+            try:
+                st.session_state['tward41_data'] = cache_loader.load_raw_t41()
+                # Journey Heatmap용 activity_analysis 로드
+                activity_analysis = cache_loader.load_t41_activity_analysis()
+                if len(activity_analysis) > 0:
+                    st.session_state['type41_activity_analysis'] = activity_analysis
+                # Journey Heatmap precomputed 데이터 로드 (10분 단위, 벡터화)
+                journey_heatmap = cache_loader.load_t41_journey_heatmap()
+                if len(journey_heatmap) > 0:
+                    st.session_state['type41_journey_heatmap'] = journey_heatmap
+            except:
+                st.session_state['tward41_data'] = None
     
-    if raw_data_status.get('flow', False):
+    # Flow 데이터 로드 (레코드가 있으면)
+    if selected_dataset.get('flow_records', 0) > 0:
         if 'flow_data' not in st.session_state or st.session_state.get('_dashboard_dataset') != selected_name:
-            st.session_state['flow_data'] = cache_loader.load_raw_flow()
+            try:
+                st.session_state['flow_data'] = cache_loader.load_raw_flow()
+            except:
+                st.session_state['flow_data'] = None
+    
+    # S-Ward config 로드
+    raw_data_status = cache_loader.has_raw_data()
     
     if raw_data_status.get('sward_config', False):
         if 'sward_config' not in st.session_state or st.session_state.get('_dashboard_dataset') != selected_name:
@@ -389,20 +402,8 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     # Hourly summary (2-min aggregation)
     st.subheader("⏰ Hourly Personnel Status (2-min Average)")
     
-    # Show hourly worker count if T41 data exists OR can be loaded
+    # Show hourly worker count if T41 data exists
     t41_data = st.session_state.get('tward41_data')
-    if t41_data is None and selected_dataset.get('t41_records', 0) > 0:
-        # Try loading T41 data for Overview
-        with st.spinner("Loading T41 data..."):
-            try:
-                t41_data = cache_loader.load_raw_t41()
-                if t41_data is not None and not t41_data.empty:
-                    st.session_state['tward41_data'] = t41_data
-                    st.success(f"✅ T41 data loaded: {len(t41_data):,} records")
-                else:
-                    st.warning("T41 data is empty")
-            except Exception as e:
-                st.error(f"Could not load T41 data: {str(e)}")
     
     if t41_data is not None and not t41_data.empty:
         # 공통 함수 사용: T41 탭과 동일한 로직
@@ -434,18 +435,6 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     
     # Flow 데이터가 있으면 시간대별 유동인구 표시
     flow_data = st.session_state.get('flow_data')
-    if flow_data is None and selected_dataset.get('flow_records', 0) > 0:
-        # Try loading Flow data for Overview
-        with st.spinner("Loading Flow data..."):
-            try:
-                flow_data = cache_loader.load_raw_flow()
-                if flow_data is not None and not flow_data.empty:
-                    st.session_state['flow_data'] = flow_data
-                    st.success(f"✅ Flow data loaded: {len(flow_data):,} records")
-                else:
-                    st.warning("Flow data is empty")
-            except Exception as e:
-                st.error(f"Could not load Flow data: {str(e)}")
     
     if flow_data is not None and not flow_data.empty:
         if 'time' in flow_data.columns:
