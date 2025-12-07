@@ -664,60 +664,55 @@ def render_dashboard_mobilephone_tab():
 
 
 def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
-    """Device Counting 탭: 2분 unique MAC → 10분 평균"""
+    """Device Counting 탭 - 캐시 데이터만 사용"""
     import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
     
-    st.subheader("📊 Device Counting (2-min unique MAC → 10-min Avg)")
-    st.info("**Methodology**: Count unique MACs per 2-min bin, then average over 10-min (5 bins)")
+    st.subheader("📊 Device Counting (Hourly Average)")
+    st.info("**Data Source**: Pre-computed hourly averages from cache")
     
-    ten_min_avg = None
-    flow_with_loc = None
-    total_unique = 0
+    if not cache_loader:
+        st.error("Cache data is required for this tab.")
+        return
     
     # =========================================================================
-    # Data Loading (Cache vs Raw)
+    # 캐시된 1시간 평균 데이터 로드 (raw data 사용 안 함!)
     # =========================================================================
-    if cache_loader:
-        # 1. Load Total Counts from Cache
-        two_min_counts = cache_loader.load_flow_two_min_unique()
-        if not two_min_counts.empty:
-            # Ensure device_count column exists
-            if 'count' in two_min_counts.columns:
-                two_min_counts = two_min_counts.rename(columns={'count': 'device_count'})
-            elif 'device_count' not in two_min_counts.columns:
-                # If neither exists, use the first numeric column
-                numeric_cols = two_min_counts.select_dtypes(include=['int64', 'float64']).columns
+    try:
+        hourly_avg = cache_loader.load_flow_hourly_avg_from_2min()
+        if hourly_avg is None or hourly_avg.empty:
+            st.error("No hourly average data found in cache.")
+            return
+        
+        # 컬럼 이름 정규화
+        if 'hour' not in hourly_avg.columns and 'bin_index' in hourly_avg.columns:
+            hourly_avg['hour'] = hourly_avg['bin_index']
+        elif 'hour' not in hourly_avg.columns:
+            numeric_cols = hourly_avg.select_dtypes(include=['int64', 'float64']).columns
+            if len(numeric_cols) > 0:
+                hourly_avg['hour'] = hourly_avg[numeric_cols[0]]
+        
+        # device_count 컬럼 확인
+        if 'device_count' not in hourly_avg.columns:
+            if 'avg_count' in hourly_avg.columns:
+                hourly_avg['device_count'] = hourly_avg['avg_count']
+            else:
+                numeric_cols = [c for c in hourly_avg.columns if c not in ['hour', 'bin_index']]
                 if len(numeric_cols) > 0:
-                    two_min_counts['device_count'] = two_min_counts[numeric_cols[0]]
-                else:
-                    st.error("No device count column found in cache data")
-                    two_min_counts = pd.DataFrame()
+                    hourly_avg['device_count'] = hourly_avg[numeric_cols[0]]
+        
+        # hour를 정수로 변환 (0-23)
+        hourly_avg['hour'] = pd.to_numeric(hourly_avg['hour'], errors='coerce').fillna(0).astype(int)
+        hourly_avg = hourly_avg[hourly_avg['hour'] < 24]
+        
+        # Total Unique from Summary
+        total_unique = 0
+        summary = cache_loader.get_summary()
+        if summary:
+            total_unique = summary.get('flow', {}).get('total_devices', 0)
             
-            if not two_min_counts.empty and 'device_count' in two_min_counts.columns:
-                # 10분 평균 계산 (two_min_bin을 정수로 변환)
-                two_min_counts['two_min_bin'] = pd.to_numeric(two_min_counts['two_min_bin'], errors='coerce').fillna(0).astype(int)
-                two_min_counts['ten_min_bin'] = two_min_counts['two_min_bin'] // 5
-                ten_min_avg = two_min_counts.groupby('ten_min_bin')['device_count'].mean().reset_index()
-                ten_min_avg.columns = ['ten_min_bin', 'avg_device_count']
-                ten_min_avg['time_label'] = (ten_min_avg['ten_min_bin'] + 1).astype(str)
-                
-                # Total Unique from Summary
-                summary = cache_loader.get_summary()
-                if summary:
-                    total_unique = summary.get('flow', {}).get('total_devices', 0)
-    
-    if ten_min_avg is None and flow_data is not None:
-        # 2. Process Raw Data
-        flow_copy = flow_data.copy()
-        flow_copy['time'] = pd.to_datetime(flow_copy['time'])
-        
-        # 2분 bin 생성
-        flow_copy['two_min_bin'] = (flow_copy['time'].dt.hour * 30 + flow_copy['time'].dt.minute // 2)
-        # 10분 bin 생성
-        flow_copy['ten_min_bin'] = (flow_copy['time'].dt.hour * 6 + flow_copy['time'].dt.minute // 10)
-        
-        # S-Ward config 조인
+    except Exception as e:
+        st.error(f"Error loading flow data: {e}")
+        return
         if sward_config is not None:
             flow_with_loc = flow_copy.merge(
                 sward_config[['sward_id', 'building', 'level']],
@@ -750,14 +745,14 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
     # =========================================================================
     st.markdown("### 📈 Total Device Count Trend")
     
-    # 차트 - x축을 시간(0-23)으로 변경
-    ten_min_avg['hour'] = ten_min_avg['ten_min_bin'] // 6
-    hourly_avg_plot = ten_min_avg.groupby('hour')['avg_device_count'].mean().reset_index()
+    # 0-23시 보장
+    all_hours = pd.DataFrame({'hour': range(24)})
+    hourly_plot = all_hours.merge(hourly_avg[['hour', 'device_count']], on='hour', how='left').fillna(0)
     
     fig_total = go.Figure()
     fig_total.add_trace(go.Scatter(
-        x=hourly_avg_plot['hour'],
-        y=hourly_avg_plot['avg_device_count'],
+        x=hourly_plot['hour'],
+        y=hourly_plot['device_count'],
         mode='lines+markers',
         name='Total Devices',
         line=dict(color='#1f77b4', width=3),
@@ -781,17 +776,13 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
     # 통계 메트릭
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("📱 Peak", f"{ten_min_avg['avg_device_count'].max():.0f}")
+        st.metric("📱 Peak", f"{hourly_plot['device_count'].max():.0f}")
     with col2:
-        st.metric("📊 Average", f"{ten_min_avg['avg_device_count'].mean():.1f}")
+        st.metric("📊 Average", f"{hourly_plot['device_count'].mean():.1f}")
     with col3:
-        st.metric("📉 Min", f"{ten_min_avg['avg_device_count'].min():.0f}")
+        st.metric("📉 Min", f"{hourly_plot['device_count'].min():.0f}")
     with col4:
-        # 총 누적 unique MAC
         if total_unique > 0:
-            st.metric("🔢 Total Unique (Daily)", f"{total_unique:,}")
-        elif flow_with_loc is not None:
-            total_unique = flow_with_loc['mac'].nunique()
             st.metric("🔢 Total Unique (Daily)", f"{total_unique:,}")
         else:
             st.metric("🔢 Total Unique (Daily)", "N/A")
@@ -801,117 +792,14 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
     # =========================================================================
     st.markdown("---")
     st.markdown("### 🏢 Device Count by Building")
-    
-    if cache_loader and flow_with_loc is None:
-        st.info("Building breakdown not available in cache mode (Coming Soon)")
-    elif flow_with_loc is not None:
-        buildings = flow_with_loc['building'].dropna().unique()
-        buildings = [b for b in buildings if b != 'Unknown']
-        
-        if len(buildings) > 0:
-            # 빌딩별 10분 평균 계산
-            building_two_min = flow_with_loc.groupby(['building', 'two_min_bin'])['mac'].nunique().reset_index()
-            building_two_min.columns = ['building', 'two_min_bin', 'device_count']
-            building_two_min['ten_min_bin'] = building_two_min['two_min_bin'] // 5
-            
-            building_ten_min = building_two_min.groupby(['building', 'ten_min_bin'])['device_count'].mean().reset_index()
-            building_ten_min.columns = ['building', 'ten_min_bin', 'avg_device_count']
-            
-            # Building 색상
-            from src.colors import BUILDING_COLORS
-            building_color_map = {b: BUILDING_COLORS.get(b, '#888888') for b in buildings}
-            
-            fig_building = go.Figure()
-            for building in sorted(buildings):
-                bdata = building_ten_min[building_ten_min['building'] == building].copy()
-                bdata['time_label'] = bdata['ten_min_bin'].apply(lambda x: f"{x//6:02d}:{(x%6)*10:02d}")
-                
-                fig_building.add_trace(go.Scatter(
-                    x=bdata['time_label'],
-                    y=bdata['avg_device_count'],
-                    mode='lines+markers',
-                    name=building,
-                    line=dict(color=building_color_map.get(building, '#888888'), width=2),
-                    marker=dict(size=6)
-                ))
-            
-            fig_building.update_layout(
-                title='Device Count by Building (10-min Avg)',
-                xaxis_title='Time',
-                yaxis_title='Average Device Count',
-                height=400,
-                template='plotly_white',
-                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
-            )
-            st.plotly_chart(fig_building, use_container_width=True)
-            
-            # 빌딩별 통계 테이블
-            building_stats = []
-            for building in sorted(buildings):
-                bdata = building_ten_min[building_ten_min['building'] == building]
-                building_stats.append({
-                    'Building': building,
-                    'Peak': bdata['avg_device_count'].max(),
-                    'Average': bdata['avg_device_count'].mean(),
-                    'Min': bdata['avg_device_count'].min()
-                })
-            
-            stats_df = pd.DataFrame(building_stats)
-            st.dataframe(stats_df.style.format({
-                'Peak': '{:.0f}',
-                'Average': '{:.1f}',
-                'Min': '{:.0f}'
-            }), use_container_width=True, hide_index=True)
+    st.info("Building breakdown not available in cache mode (Coming Soon)")
     
     # =========================================================================
     # 3. 층별 인원수 추이
     # =========================================================================
     st.markdown("---")
     st.markdown("### 🏗️ Device Count by Floor")
-    
-    if cache_loader and flow_with_loc is None:
-        st.info("Floor breakdown not available in cache mode (Coming Soon)")
-    elif flow_with_loc is not None:
-        # Building-Level 조합 생성
-        flow_with_loc['building_level'] = flow_with_loc['building'].fillna('Unknown') + '-' + flow_with_loc['level'].fillna('Unknown')
-        building_levels = flow_with_loc['building_level'].unique()
-        building_levels = [bl for bl in building_levels if 'Unknown' not in bl]
-        
-        if len(building_levels) > 0:
-            # Building-Level별 10분 평균 계산
-            bl_two_min = flow_with_loc.groupby(['building_level', 'two_min_bin'])['mac'].nunique().reset_index()
-            bl_two_min.columns = ['building_level', 'two_min_bin', 'device_count']
-            bl_two_min['ten_min_bin'] = bl_two_min['two_min_bin'] // 5
-            
-            bl_ten_min = bl_two_min.groupby(['building_level', 'ten_min_bin'])['device_count'].mean().reset_index()
-            bl_ten_min.columns = ['building_level', 'ten_min_bin', 'avg_device_count']
-            
-            # Building-Level 색상
-            from src.colors import BUILDING_LEVEL_HEX_COLORS
-            
-            fig_level = go.Figure()
-            for bl in sorted(building_levels):
-                bldata = bl_ten_min[bl_ten_min['building_level'] == bl].copy()
-                bldata['time_label'] = bldata['ten_min_bin'].apply(lambda x: f"{x//6:02d}:{(x%6)*10:02d}")
-                
-                fig_level.add_trace(go.Scatter(
-                    x=bldata['time_label'],
-                    y=bldata['avg_device_count'],
-                    mode='lines+markers',
-                    name=bl,
-                    line=dict(color=BUILDING_LEVEL_HEX_COLORS.get(bl, '#888888'), width=2),
-                    marker=dict(size=5)
-                ))
-            
-            fig_level.update_layout(
-                title='Device Count by Floor (10-min Avg)',
-                xaxis_title='Time',
-                yaxis_title='Average Device Count',
-                height=450,
-                template='plotly_white',
-                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
-            )
-            st.plotly_chart(fig_level, use_container_width=True)
+    st.info("Floor breakdown not available in cache mode (Coming Soon)")
 
 
 def _render_tward_vs_mobile_tab(flow_data, sward_config, cache_loader=None):
