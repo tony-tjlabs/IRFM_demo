@@ -2148,8 +2148,11 @@ def render_t31_ai_insight_report():
     if cache_loader:
         cached_insights = cache_loader.load_ai_insights('t31')
     
-    total_equipment = t31_data['mac'].nunique()
-    total_records = len(t31_data)
+    total_equipment = 0
+    total_records = 0
+    if t31_data is not None and not t31_data.empty:
+        total_equipment = t31_data['mac'].nunique()
+        total_records = len(t31_data)
     
     if cached_insights:
         st.success("✅ AI Insights loaded from cache (pre-computed)")
