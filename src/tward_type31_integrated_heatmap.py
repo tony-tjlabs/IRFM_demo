@@ -403,4 +403,4 @@ def display_integrated_operation_heatmap(heatmap_result):
     print("🎯 display_integrated_operation_heatmap 완료")
 
 if __name__ == "__main__":
-    print("T-Ward Type 31 Integrated Operation Heatmap Module loaded")
+    print("T-Ward Type 31 Integrated Operation Heatmap Module loaded")# Force redeploy Sun Dec  7 21:27:36 KST 2025
