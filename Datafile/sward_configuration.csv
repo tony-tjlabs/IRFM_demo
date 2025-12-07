@@ -1,0 +1,70 @@
+building,level,sward_id,x,y,map_image,space_type
+WWT,B1F,27053744.0,163,879,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053743.0,440,954,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053837.0,704,901,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053741.0,1137,908,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053748.0,161,556,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053729.0,1140,561,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053761.0,1546,496,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053778.0,375,284,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053759.0,517,361,Map_WWT_B1F.png,Work Area
+WWT,B1F,27041402.0,307,28,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053834.0,510,98,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053734.0,844,26,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053766.0,1128,93,Map_WWT_B1F.png,Work Area
+WWT,B1F,27053788.0,1539,98,Map_WWT_B1F.png,Work Area
+WWT,1F,27041076.0,158,1019,Map_WWT_1F.png,Work Area
+WWT,1F,27041732.0,524,959,Map_WWT_1F.png,Work Area
+WWT,1F,27041413.0,856,956,Map_WWT_1F.png,Work Area
+WWT,1F,27041273.0,1212,959,Map_WWT_1F.png,Work Area
+WWT,1F,27041229.0,1469,956,Map_WWT_1F.png,Work Area
+WWT,1F,27041041.0,240,513,Map_WWT_1F.png,Work Area
+WWT,1F,27041703.0,570,496,Map_WWT_1F.png,Work Area
+WWT,1F,27041805.0,861,563,Map_WWT_1F.png,Work Area
+WWT,1F,27041987.0,1200,498,Map_WWT_1F.png,Work Area
+WWT,1F,27042035.0,1626,566,Map_WWT_1F.png,Work Area
+WWT,1F,27041611.0,312,228,Map_WWT_1F.png,Work Area
+WWT,1F,27041237.0,445,284,Map_WWT_1F.png,Work Area
+WWT,1F,27041519.0,1065,224,Map_WWT_1F.png,Work Area
+WWT,1F,27041404.0,1200,240,Map_WWT_1F.png,Work Area
+WWT,1F,27041479.0,1554,236,Map_WWT_1F.png,Work Area
+FAB,1F,27053604.0,1175,793,Map_FAB_1F.png,Manufacturing Area
+FAB,1F,27053567.0,1451,785,Map_FAB_1F.png,Manufacturing Area
+FAB,1F,27053650.0,1673,796,Map_FAB_1F.png,Manufacturing Area
+FAB,1F,27053631.0,1221,579,Map_FAB_1F.png,Manufacturing Area
+FAB,1F,27053639.0,1394,585,Map_FAB_1F.png,Manufacturing Area
+FAB,1F,27053554.0,1560,585,Map_FAB_1F.png,Manufacturing Area
+FAB,1F,27053582.0,1700,585,Map_FAB_1F.png,Manufacturing Area
+FAB,1F,27053363.0,1218,376,Map_FAB_1F.png,Manufacturing Area
+FAB,1F,27053161.0,1454,382,Map_FAB_1F.png,Manufacturing Area
+FAB,1F,27053601.0,1671,376,Map_FAB_1F.png,Manufacturing Area
+CUB,1F,27052999.0,546,400,Map_CUB_1F.png,Assembly Area
+CUB,1F,27052869.0,849,403,Map_CUB_1F.png,Assembly Area
+CUB,1F,27053023.0,1534,412,Map_CUB_1F.png,Assembly Area
+CUB,1F,27052817.0,1920,403,Map_CUB_1F.png,Assembly Area
+CUB,1F,27053093.0,1231,311,Map_CUB_1F.png,Assembly Area
+CUB,1F,27053100.0,445,169,Map_CUB_1F.png,Assembly Area
+CUB,1F,27053032.0,745,160,Map_CUB_1F.png,Assembly Area
+CUB,1F,27053134.0,1231,157,Map_CUB_1F.png,Assembly Area
+CUB,1F,27052940.0,1635,169,Map_CUB_1F.png,Assembly Area
+CUB,1F,27052895.0,2015,157,Map_CUB_1F.png,Assembly Area
+CUB,B1F,27052989.0,65,516,Map_CUB_B1F.png,Assembly Area
+CUB,B1F,27052992.0,258,519,Map_CUB_B1F.png,Assembly Area
+CUB,B1F,27052796.0,1246,519,Map_CUB_B1F.png,Assembly Area
+CUB,B1F,27053107.0,160,439,Map_CUB_B1F.png,Assembly Area
+CUB,B1F,27052933.0,558,439,Map_CUB_B1F.png,Assembly Area
+CUB,B1F,27052727.0,659,439,Map_CUB_B1F.png,Assembly Area
+CUB,B1F,27052772.0,866,365,Map_CUB_B1F.png,Assembly Area
+CUB,B1F,27052843.0,555,130,Map_CUB_B1F.png,Assembly Area
+CUB,B1F,27052790.0,656,121,Map_CUB_B1F.png,Assembly Area
+CUB,B1F,27052784.0,955,130,Map_CUB_B1F.png,Assembly Area
+Cluster,1F,27042887,841,299,Map_Cluster_1F.png,Rest Area 1
+Cluster,1F,27043199,806,456,Map_Cluster_1F.png,Rest Area 2
+Cluster,1F,27043104,883,559,Map_Cluster_1F.png,Rest Area 3
+Cluster,1F,27043188,1242,414,Map_Cluster_1F.png,Smoking Area
+Cluster,1F,27042399,1178,527,Map_Cluster_1F.png,Restroom
+Cluster,1F,27043201,1111,640,Map_Cluster_1F.png,Center Stair
+Cluster,1F,27041773,1217,768,Map_Cluster_1F.png,Left Stair
+Cluster,1F,27043277,1143,810,Map_Cluster_1F.png,Storage Rack
+Cluster,1F,27042145,802,907,Map_Cluster_1F.png,Entrance
+Cluster,1F,27042140,886,913,Map_Cluster_1F.png,Exit

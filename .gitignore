@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.mp4
+*.avi
+*.mov
+Datafile/Rawdata/**/cache/raw_*.parquet
+Datafile/Rawdata/**/*.csv
