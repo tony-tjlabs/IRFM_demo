@@ -762,7 +762,11 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
         sward_config = None
         try:
             sward_config = cache_loader.load_raw_sward_config()
-        except:
+            if sward_config is not None and not sward_config.empty:
+                # Convert sward_id to int for merge compatibility
+                sward_config['sward_id'] = sward_config['sward_id'].astype(int)
+        except Exception as e:
+            print(f"Error loading sward config: {e}")
             sward_config = st.session_state.get('sward_config')
         
         if sward_config is not None and not sward_config.empty:
@@ -895,11 +899,19 @@ def _render_tward_vs_mobile_tab(flow_data, sward_config, cache_loader=None):
     t41_with_loc = None
     
     if t41_data is not None and sward_config is not None:
-        t41_with_loc = t41_data.merge(
-            sward_config[['sward_id', 'building', 'level']],
-            on='sward_id',
-            how='left'
-        )
+        try:
+            # Ensure sward_id types match
+            sward_config_copy = sward_config.copy()
+            if 'sward_id' in sward_config_copy.columns:
+                sward_config_copy['sward_id'] = sward_config_copy['sward_id'].astype(int)
+            t41_with_loc = t41_data.merge(
+                sward_config_copy[['sward_id', 'building', 'level']],
+                on='sward_id',
+                how='left'
+            )
+        except Exception as e:
+            st.error(f"Error merging T41 data with sward config: {e}")
+            t41_with_loc = None
         buildings = t41_with_loc['building'].dropna().unique().tolist()
         buildings = sorted([b for b in buildings if str(b) != 'nan'])
     elif cache_loader:
@@ -965,8 +977,17 @@ def _render_tward_vs_mobile_tab(flow_data, sward_config, cache_loader=None):
         flow_copy['time'] = pd.to_datetime(flow_copy['time'])
         
         if sward_config is not None:
-            t41_with_loc = t41_copy.merge(sward_config[['sward_id', 'building', 'level']], on='sward_id', how='left')
-            flow_with_loc = flow_copy.merge(sward_config[['sward_id', 'building', 'level']], on='sward_id', how='left')
+            try:
+                # Ensure sward_id types match
+                sward_config_copy = sward_config.copy()
+                if 'sward_id' in sward_config_copy.columns:
+                    sward_config_copy['sward_id'] = sward_config_copy['sward_id'].astype(int)
+                t41_with_loc = t41_copy.merge(sward_config_copy[['sward_id', 'building', 'level']], on='sward_id', how='left')
+                flow_with_loc = flow_copy.merge(sward_config_copy[['sward_id', 'building', 'level']], on='sward_id', how='left')
+            except Exception as e:
+                st.error(f"Error merging data with sward config: {e}")
+                t41_with_loc = t41_copy
+                flow_with_loc = flow_copy
         else:
             t41_with_loc = t41_copy
             flow_with_loc = flow_copy
