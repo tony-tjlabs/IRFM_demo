@@ -1057,10 +1057,18 @@ def _render_apple_vs_android_tab(flow_data, cache_loader=None):
             device_summary = cache_loader.load_flow_device_type_stats()
             # Ensure columns match
             if device_summary is not None and not device_summary.empty:
+                # Normalize column names
                 if 'device_type' in device_summary.columns:
-                    device_summary = device_summary.rename(columns={'device_type': 'Device Type', 'count': 'Count'})
+                    device_summary = device_summary.rename(columns={'device_type': 'Device Type'})
+                if 'count' in device_summary.columns:
+                    device_summary = device_summary.rename(columns={'count': 'Count'})
+                # Ensure required columns exist
+                if 'Device Type' not in device_summary.columns or 'Count' not in device_summary.columns:
+                    st.error("Cache data missing required columns")
+                    device_summary = None
         except Exception as e:
             print(f"Error loading device type stats: {e}")
+            device_summary = None
             
     if device_summary is None and flow_data is not None:
         # Raw Data Processing
@@ -1098,8 +1106,13 @@ def _render_apple_vs_android_tab(flow_data, cache_loader=None):
         
         hourly_pivot = hourly_pivot.reset_index()
 
-    if device_summary is None:
+    if device_summary is None or device_summary.empty:
         st.warning("No device type data available.")
+        return
+    
+    # Validate columns exist
+    if 'Count' not in device_summary.columns or 'Device Type' not in device_summary.columns:
+        st.error(f"Invalid device_summary columns: {device_summary.columns.tolist()}")
         return
 
     # =========================================================================
