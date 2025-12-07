@@ -1171,26 +1171,26 @@ def _render_apple_vs_android_tab(flow_data, cache_loader=None):
         marker=dict(size=8)
     ), row=2, col=1)
     
-        fig_hourly.add_trace(go.Scatter(
-            x=hourly_pivot['Hour'],
-            y=hourly_pivot['Android %'],
-            mode='lines+markers',
-            name='Android %',
-            line=dict(color='#3DDC84', width=2),
-            marker=dict(size=8)
-        ), row=2, col=1)
-        
-        fig_hourly.update_layout(
-            height=550,
-            template='plotly_white',
-            barmode='stack',
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
-        )
-        fig_hourly.update_yaxes(title_text='Count', row=1, col=1)
-        fig_hourly.update_yaxes(title_text='Ratio (%)', row=2, col=1)
-        fig_hourly.update_xaxes(title_text='Hour', row=2, col=1)
-        
-        st.plotly_chart(fig_hourly, use_container_width=True)
+    fig_hourly.add_trace(go.Scatter(
+        x=hourly_pivot['Hour'],
+        y=hourly_pivot['Android %'],
+        mode='lines+markers',
+        name='Android %',
+        line=dict(color='#3DDC84', width=2),
+        marker=dict(size=8)
+    ), row=2, col=1)
+    
+    fig_hourly.update_layout(
+        height=550,
+        template='plotly_white',
+        barmode='stack',
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+    )
+    fig_hourly.update_yaxes(title_text='Count', row=1, col=1)
+    fig_hourly.update_yaxes(title_text='Ratio (%)', row=2, col=1)
+    fig_hourly.update_xaxes(title_text='Hour', row=2, col=1)
+    
+    st.plotly_chart(fig_hourly, use_container_width=True)
     else:
         st.info("Hourly breakdown not available in cache mode.")
 
