@@ -843,25 +843,25 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
                             line=dict(color='#2196F3', width=3),
                             marker=dict(size=8)
                         ))
-                    
-                    title_suffix = ""
-                    if selected_building != "All":
-                        title_suffix = f" - {selected_building}"
-                        if selected_level != "All":
-                            title_suffix += f"-{selected_level}"
-                    
-                    fig.update_layout(
-                        title=f'Hourly Device Count{title_suffix}',
-                        xaxis_title='Hour',
-                        yaxis_title='Unique Devices',
-                        height=400,
-                        template='plotly_white',
-                        xaxis=dict(
-                            tickmode='linear',
-                            tick0=0,
-                            dtick=1,
-                            range=[-0.5, 23.5]
-                        )
+                        
+                        title_suffix = ""
+                        if selected_building != "All":
+                            title_suffix = f" - {selected_building}"
+                            if selected_level != "All":
+                                title_suffix += f"-{selected_level}"
+                        
+                        fig.update_layout(
+                            title=f'Hourly Device Count{title_suffix}',
+                            xaxis_title='Hour',
+                            yaxis_title='Unique Devices',
+                            height=400,
+                            template='plotly_white',
+                            xaxis=dict(
+                                tickmode='linear',
+                                tick0=0,
+                                dtick=1,
+                                range=[-0.5, 23.5]
+                            )
                         )
                         st.plotly_chart(fig, use_container_width=True)
                         
