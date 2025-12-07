@@ -912,8 +912,10 @@ def _render_tward_vs_mobile_tab(flow_data, sward_config, cache_loader=None):
         except Exception as e:
             st.error(f"Error merging T41 data with sward config: {e}")
             t41_with_loc = None
-        buildings = t41_with_loc['building'].dropna().unique().tolist()
-        buildings = sorted([b for b in buildings if str(b) != 'nan'])
+        
+        if t41_with_loc is not None:
+            buildings = t41_with_loc['building'].dropna().unique().tolist()
+            buildings = sorted([b for b in buildings if str(b) != 'nan'])
     elif cache_loader:
         # Try to get buildings from cache filters
         try:
