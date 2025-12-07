@@ -496,13 +496,13 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     
     if cache_loader:
         try:
-            # Load cached flow hourly data (dashboard_results_flow_hourly_devices.parquet)
-            hourly_avg = cache_loader.load_flow_hourly_devices()
+            # Load cached flow hourly AVERAGE data (flow_results_hourly_avg_from_2min.parquet)
+            hourly_avg = cache_loader.load_flow_hourly_avg_from_2min()
             
             if hourly_avg is not None and not hourly_avg.empty:
                 # Rename columns for consistency
-                if 'unique_devices' in hourly_avg.columns:
-                    hourly_avg = hourly_avg.rename(columns={'unique_devices': 'avg_device_count'})
+                if 'avg_unique_mac' in hourly_avg.columns:
+                    hourly_avg = hourly_avg.rename(columns={'avg_unique_mac': 'avg_device_count'})
                 elif 'device_count' in hourly_avg.columns:
                     hourly_avg = hourly_avg.rename(columns={'device_count': 'avg_device_count'})
                 
@@ -671,20 +671,20 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
     # 캐시된 1시간 평균 데이터 로드 (raw data 사용 안 함!)
     # =========================================================================
     try:
-        # dashboard_results_flow_hourly_devices.parquet 파일 사용
-        # 컬럼: hour (0-23), unique_devices
-        hourly_avg = cache_loader.load_flow_hourly_devices()
+        # flow_results_hourly_avg_from_2min.parquet 파일 사용
+        # 컬럼: hour (0-23), avg_unique_mac (2분 unique MAC의 시간별 평균)
+        hourly_avg = cache_loader.load_flow_hourly_avg_from_2min()
         
         if hourly_avg is None or hourly_avg.empty:
-            st.error("No hourly device data found in cache.")
+            st.error("No hourly average data found in cache.")
             return
         
         # 컬럼 이름 정규화
         if 'device_count' not in hourly_avg.columns:
-            if 'unique_devices' in hourly_avg.columns:
-                hourly_avg['device_count'] = hourly_avg['unique_devices']
-            elif 'avg_unique_mac' in hourly_avg.columns:
+            if 'avg_unique_mac' in hourly_avg.columns:
                 hourly_avg['device_count'] = hourly_avg['avg_unique_mac']
+            elif 'unique_devices' in hourly_avg.columns:
+                hourly_avg['device_count'] = hourly_avg['unique_devices']
             else:
                 st.error("Cannot find device count column in cache data")
                 return
