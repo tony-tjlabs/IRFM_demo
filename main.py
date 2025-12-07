@@ -393,12 +393,16 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     t41_data = st.session_state.get('tward41_data')
     if t41_data is None and selected_dataset.get('t41_records', 0) > 0:
         # Try loading T41 data for Overview
-        try:
-            t41_data = cache_loader.load_raw_t41()
-            if t41_data is not None and not t41_data.empty:
-                st.session_state['tward41_data'] = t41_data
-        except Exception as e:
-            print(f"Could not load T41 data for overview: {e}")
+        with st.spinner("Loading T41 data..."):
+            try:
+                t41_data = cache_loader.load_raw_t41()
+                if t41_data is not None and not t41_data.empty:
+                    st.session_state['tward41_data'] = t41_data
+                    st.success(f"✅ T41 data loaded: {len(t41_data):,} records")
+                else:
+                    st.warning("T41 data is empty")
+            except Exception as e:
+                st.error(f"Could not load T41 data: {str(e)}")
     
     if t41_data is not None and not t41_data.empty:
         # 공통 함수 사용: T41 탭과 동일한 로직
@@ -432,12 +436,16 @@ def render_dashboard_overview(cache_loader, selected_dataset):
     flow_data = st.session_state.get('flow_data')
     if flow_data is None and selected_dataset.get('flow_records', 0) > 0:
         # Try loading Flow data for Overview
-        try:
-            flow_data = cache_loader.load_raw_flow()
-            if flow_data is not None and not flow_data.empty:
-                st.session_state['flow_data'] = flow_data
-        except Exception as e:
-            print(f"Could not load Flow data for overview: {e}")
+        with st.spinner("Loading Flow data..."):
+            try:
+                flow_data = cache_loader.load_raw_flow()
+                if flow_data is not None and not flow_data.empty:
+                    st.session_state['flow_data'] = flow_data
+                    st.success(f"✅ Flow data loaded: {len(flow_data):,} records")
+                else:
+                    st.warning("Flow data is empty")
+            except Exception as e:
+                st.error(f"Could not load Flow data: {str(e)}")
     
     if flow_data is not None and not flow_data.empty:
         if 'time' in flow_data.columns:
