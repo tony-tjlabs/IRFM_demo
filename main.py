@@ -707,59 +707,59 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
         buildings = [b for b in buildings if b != 'Unknown']
         
         if len(buildings) > 0:
-        # 빌딩별 10분 평균 계산
-        building_two_min = flow_with_loc.groupby(['building', 'two_min_bin'])['mac'].nunique().reset_index()
-        building_two_min.columns = ['building', 'two_min_bin', 'device_count']
-        building_two_min['ten_min_bin'] = building_two_min['two_min_bin'] // 5
-        
-        building_ten_min = building_two_min.groupby(['building', 'ten_min_bin'])['device_count'].mean().reset_index()
-        building_ten_min.columns = ['building', 'ten_min_bin', 'avg_device_count']
-        
-        # Building 색상
-        from src.colors import BUILDING_COLORS
-        building_color_map = {b: BUILDING_COLORS.get(b, '#888888') for b in buildings}
-        
-        fig_building = go.Figure()
-        for building in sorted(buildings):
-            bdata = building_ten_min[building_ten_min['building'] == building].copy()
-            bdata['time_label'] = bdata['ten_min_bin'].apply(lambda x: f"{x//6:02d}:{(x%6)*10:02d}")
+            # 빌딩별 10분 평균 계산
+            building_two_min = flow_with_loc.groupby(['building', 'two_min_bin'])['mac'].nunique().reset_index()
+            building_two_min.columns = ['building', 'two_min_bin', 'device_count']
+            building_two_min['ten_min_bin'] = building_two_min['two_min_bin'] // 5
             
-            fig_building.add_trace(go.Scatter(
-                x=bdata['time_label'],
-                y=bdata['avg_device_count'],
-                mode='lines+markers',
-                name=building,
-                line=dict(color=building_color_map.get(building, '#888888'), width=2),
-                marker=dict(size=6)
-            ))
-        
-        fig_building.update_layout(
-            title='빌딩별 디바이스 수 (10분 평균)',
-            xaxis_title='Time',
-            yaxis_title='Average Device Count',
-            height=400,
-            template='plotly_white',
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
-        )
-        st.plotly_chart(fig_building, use_container_width=True)
-        
-        # 빌딩별 통계 테이블
-        building_stats = []
-        for building in sorted(buildings):
-            bdata = building_ten_min[building_ten_min['building'] == building]
-            building_stats.append({
-                'Building': building,
-                'Peak': bdata['avg_device_count'].max(),
-                'Average': bdata['avg_device_count'].mean(),
-                'Min': bdata['avg_device_count'].min()
-            })
-        
-        stats_df = pd.DataFrame(building_stats)
-        st.dataframe(stats_df.style.format({
-            'Peak': '{:.0f}',
-            'Average': '{:.1f}',
-            'Min': '{:.0f}'
-        }), use_container_width=True, hide_index=True)
+            building_ten_min = building_two_min.groupby(['building', 'ten_min_bin'])['device_count'].mean().reset_index()
+            building_ten_min.columns = ['building', 'ten_min_bin', 'avg_device_count']
+            
+            # Building 색상
+            from src.colors import BUILDING_COLORS
+            building_color_map = {b: BUILDING_COLORS.get(b, '#888888') for b in buildings}
+            
+            fig_building = go.Figure()
+            for building in sorted(buildings):
+                bdata = building_ten_min[building_ten_min['building'] == building].copy()
+                bdata['time_label'] = bdata['ten_min_bin'].apply(lambda x: f"{x//6:02d}:{(x%6)*10:02d}")
+                
+                fig_building.add_trace(go.Scatter(
+                    x=bdata['time_label'],
+                    y=bdata['avg_device_count'],
+                    mode='lines+markers',
+                    name=building,
+                    line=dict(color=building_color_map.get(building, '#888888'), width=2),
+                    marker=dict(size=6)
+                ))
+            
+            fig_building.update_layout(
+                title='Device Count by Building (10-min Avg)',
+                xaxis_title='Time',
+                yaxis_title='Average Device Count',
+                height=400,
+                template='plotly_white',
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+            )
+            st.plotly_chart(fig_building, use_container_width=True)
+            
+            # 빌딩별 통계 테이블
+            building_stats = []
+            for building in sorted(buildings):
+                bdata = building_ten_min[building_ten_min['building'] == building]
+                building_stats.append({
+                    'Building': building,
+                    'Peak': bdata['avg_device_count'].max(),
+                    'Average': bdata['avg_device_count'].mean(),
+                    'Min': bdata['avg_device_count'].min()
+                })
+            
+            stats_df = pd.DataFrame(building_stats)
+            st.dataframe(stats_df.style.format({
+                'Peak': '{:.0f}',
+                'Average': '{:.1f}',
+                'Min': '{:.0f}'
+            }), use_container_width=True, hide_index=True)
     
     # =========================================================================
     # 3. 층별 인원수 추이
