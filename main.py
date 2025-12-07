@@ -601,22 +601,32 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
         # 1. Load Total Counts from Cache
         two_min_counts = cache_loader.load_flow_two_min_unique()
         if not two_min_counts.empty:
+            # Ensure device_count column exists
             if 'count' in two_min_counts.columns:
                 two_min_counts = two_min_counts.rename(columns={'count': 'device_count'})
+            elif 'device_count' not in two_min_counts.columns:
+                # If neither exists, use the first numeric column
+                numeric_cols = two_min_counts.select_dtypes(include=['int64', 'float64']).columns
+                if len(numeric_cols) > 0:
+                    two_min_counts['device_count'] = two_min_counts[numeric_cols[0]]
+                else:
+                    st.error("No device count column found in cache data")
+                    two_min_counts = pd.DataFrame()
             
-            # 10분 평균 계산 (two_min_bin을 정수로 변환)
-            two_min_counts['two_min_bin'] = pd.to_numeric(two_min_counts['two_min_bin'], errors='coerce').fillna(0).astype(int)
-            two_min_counts['ten_min_bin'] = two_min_counts['two_min_bin'] // 5
-            ten_min_avg = two_min_counts.groupby('ten_min_bin')['device_count'].mean().reset_index()
-            ten_min_avg.columns = ['ten_min_bin', 'avg_device_count']
-            ten_min_avg['time_label'] = ten_min_avg['ten_min_bin'].apply(
-                lambda x: f"{x//6:02d}:{(x%6)*10:02d}"
-            )
-            
-            # Total Unique from Summary
-            summary = cache_loader.get_summary()
-            if summary:
-                total_unique = summary.get('flow', {}).get('total_devices', 0)
+            if not two_min_counts.empty and 'device_count' in two_min_counts.columns:
+                # 10분 평균 계산 (two_min_bin을 정수로 변환)
+                two_min_counts['two_min_bin'] = pd.to_numeric(two_min_counts['two_min_bin'], errors='coerce').fillna(0).astype(int)
+                two_min_counts['ten_min_bin'] = two_min_counts['two_min_bin'] // 5
+                ten_min_avg = two_min_counts.groupby('ten_min_bin')['device_count'].mean().reset_index()
+                ten_min_avg.columns = ['ten_min_bin', 'avg_device_count']
+                ten_min_avg['time_label'] = ten_min_avg['ten_min_bin'].apply(
+                    lambda x: f"{x//6:02d}:{(x%6)*10:02d}"
+                )
+                
+                # Total Unique from Summary
+                summary = cache_loader.get_summary()
+                if summary:
+                    total_unique = summary.get('flow', {}).get('total_devices', 0)
     
     if ten_min_avg is None and flow_data is not None:
         # 2. Process Raw Data
