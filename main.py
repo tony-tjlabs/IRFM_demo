@@ -164,8 +164,8 @@ def calculate_t41_hourly_stats(bin_stats_10min: pd.DataFrame) -> pd.DataFrame:
     10분 단위 stats를 시간대별로 집계 (Overview 탭용)
     
     방법론:
-    - 10분 bin별 Active/Inactive MAC을 시간대별로 합산
-    - 동일 MAC이 여러 bin에서 Active일 수 있으므로 max 사용
+    - 10분 bin별 Active/Inactive/Total을 시간대별로 평균
+    - 6개 10분 bins → 1시간 평균
     """
     # bin_index에서 Hour 추출 (bin_index는 0부터 시작, 6개가 1시간)
     if 'Hour' not in bin_stats_10min.columns:
@@ -174,9 +174,9 @@ def calculate_t41_hourly_stats(bin_stats_10min: pd.DataFrame) -> pd.DataFrame:
         bin_stats_10min['Hour'] = bin_stats_10min[bin_index_col] // 6
     
     hourly = bin_stats_10min.groupby('Hour').agg({
-        'Total': 'max',  # 해당 시간의 피크 Total
-        'Active': 'max',  # 해당 시간의 피크 Active
-        'Inactive': 'max'  # 해당 시간의 피크 Inactive
+        'Total': 'mean',  # 해당 시간의 평균 Total
+        'Active': 'mean',  # 해당 시간의 평균 Active
+        'Inactive': 'mean'  # 해당 시간의 평균 Inactive
     }).reset_index()
     
     # 0-23시 보장
