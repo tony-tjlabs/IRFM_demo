@@ -157,6 +157,10 @@ class CachedDataLoader:
         """Flow 10분 단위 unique MAC 카운트"""
         return self._load_parquet("flow_results_ten_min_unique.parquet")
     
+    def load_flow_unit_time_unique(self) -> pd.DataFrame:
+        """Flow UnitTime 단위 unique MAC 카운트 (5분 기본)"""
+        return self._load_parquet("flow_results_unit_time_unique.parquet")
+    
     def load_flow_device_type_stats(self) -> pd.DataFrame:
         """Flow 디바이스 타입별 통계 (Apple/Android)"""
         return self._load_parquet("flow_results_device_type_stats.parquet")

@@ -77,7 +77,7 @@ def render_tward41_journey_map():
     """T-Ward Type 41 Journey Map Analysis
     
     Journey Heatmap:
-    - X-axis: Time (10-min intervals, 00:00~23:50 = 144 bins)
+    - X-axis: Time (UnitTime intervals, default 5-min = 288 bins)
     - Y-axis: Each worker (one row per MAC address)
     - Color: Which Building-Level the worker was at during that time
     
@@ -85,8 +85,8 @@ def render_tward41_journey_map():
     Falls back to activity_analysis if precomputed data is not available.
     """
     st.subheader("🗺️ T-Ward Type 41 Journey Map Analysis")
-    st.write("**Worker movement pattern analysis by time (10-min intervals)**")
-    st.write("X-axis: Time (10-min bins) | Y-axis: Workers | Color: Building-Level location")
+    st.write("**Worker movement pattern analysis by time (UnitTime intervals)**")
+    st.write("X-axis: Time (UnitTime bins) | Y-axis: Workers | Color: Building-Level location")
     
     # Check for precomputed Journey Heatmap data (fast path)
     has_precomputed = 'type41_journey_heatmap' in st.session_state and st.session_state.get('type41_journey_heatmap') is not None
@@ -290,7 +290,11 @@ def generate_journey_heatmap_from_cache(journey_data: pd.DataFrame, max_workers:
         print(f"   Selected {len(selected_macs)} workers (sorted by {sort_option})")
         print(f"   Total bins: {len(filtered_data)}")
     
-    # Create 2D matrix: workers × 144 bins
+    # Determine number of bins from data (dynamic: 288 for 5-min, 144 for 10-min)
+    max_bin = int(filtered_data['bin_index'].max()) if not filtered_data.empty else 287
+    num_bins = max_bin + 1  # 0-indexed
+    
+    # Create 2D matrix: workers × num_bins
     heatmap_matrix = []
     mac_order = []
     
@@ -298,12 +302,12 @@ def generate_journey_heatmap_from_cache(journey_data: pd.DataFrame, max_workers:
         mac_data = filtered_data[filtered_data['mac'] == mac]
         
         # Initialize row with no_signal (0)
-        row = [0] * 144
+        row = [0] * num_bins
         
         # Fill in the color codes for bins where data exists
         for _, record in mac_data.iterrows():
             bin_idx = int(record['bin_index'])
-            if 0 <= bin_idx < 144:
+            if 0 <= bin_idx < num_bins:
                 # color_code를 0-7 범위로 클램핑
                 color_code = min(max(int(record['color_code']), 0), 7)
                 row[bin_idx] = color_code
@@ -317,7 +321,7 @@ def generate_journey_heatmap_from_cache(journey_data: pd.DataFrame, max_workers:
     return {
         'heatmap_data': np.array(heatmap_matrix),
         'mac_order': mac_order,
-        'time_bins': list(range(144)),
+        'time_bins': list(range(num_bins)),
         'tward_count': len(mac_order)
     }
 
@@ -379,7 +383,12 @@ def generate_integrated_journey_heatmap(data, analysis_level, show_details=False
     if tward_activity_time.empty:
         return None
     
-    # Generate heatmap data for 144 10-min bins
+    # Get UnitTime from global config
+    from config import config as global_config
+    unit_time_minutes = global_config.UNIT_TIME_MINUTES
+    num_bins = global_config.bins_per_day()
+    
+    # Generate heatmap data for num_bins
     heatmap_data = []
     
     for _, row in tward_activity_time.iterrows():
@@ -389,17 +398,17 @@ def generate_integrated_journey_heatmap(data, analysis_level, show_details=False
         # 해당 T-Ward의 데이터 추출
         mac_data = data[data['mac'] == mac]
         
-        # 144개 10분 bin에 대해 색상 결정 (수정된 로직 - signal_count 기반)
-        for bin_idx in range(144):
-            # 🔧 올바른 시간 계산: 0시부터 시작 (bin 0 = 00:00~00:10)
-            start_minute = bin_idx * 10  # 0, 10, 20, 30, ...
-            end_minute = start_minute + 9  # 9, 19, 29, 39, ...
+        # num_bins에 대해 색상 결정 (수정된 로직 - signal_count 기반)
+        for bin_idx in range(num_bins):
+            # 🔧 올바른 시간 계산: UnitTime 기준
+            start_minute = bin_idx * unit_time_minutes
+            end_minute = start_minute + unit_time_minutes - 1
             
             # ✅ 순차적 판단 로직: 검정 → 회색 → 색상 (Building-Level)
-            minute_colors = []  # 10분 동안의 1분별 색상 저장
+            minute_colors = []  # UnitTime 동안의 1분별 색상 저장
             
-            # 10분 구간을 1분씩 분석하여 각 1분의 색상 결정
-            for minute_offset in range(10):
+            # UnitTime 구간을 1분씩 분석하여 각 1분의 색상 결정
+            for minute_offset in range(unit_time_minutes):
                 current_minute = start_minute + minute_offset
                 # 🔧 minute_bin 매칭 수정 (정확한 분 단위 매칭)
                 minute_data = mac_data[mac_data['minute_bin'] == current_minute]
@@ -521,8 +530,11 @@ def generate_integrated_journey_heatmap(data, analysis_level, show_details=False
         
         heatmap_data.append(tward_row)
     
-    # DataFrame 생성 (T-Ward + 144개 10분 bins)
-    columns = ['MAC Address', 'Activity Time (min)'] + [f"T{i:03d}" for i in range(144)]
+    # Determine number of bins from data
+    num_bins = heatmap_data.shape[1] if len(heatmap_data) > 0 else 288
+    
+    # DataFrame 생성 (T-Ward + num_bins)
+    columns = ['MAC Address', 'Activity Time (min)'] + [f"T{i:03d}" for i in range(num_bins)]
     
     # MAC과 Active Time 정보 추가
     final_data = []
@@ -787,9 +799,10 @@ def analyze_journey_patterns(heatmap_df):
                 color_distribution[color_val] = count
         
         # 주요 활동 공간 (가장 많이 나타난 색상)
+        num_bins_in_data = len(worker_data)
         if color_distribution:
             dominant_color = max(color_distribution, key=color_distribution.get)
-            dominant_ratio = color_distribution[dominant_color] / 144
+            dominant_ratio = color_distribution[dominant_color] / num_bins_in_data if num_bins_in_data > 0 else 0
         else:
             dominant_color = 0
             dominant_ratio = 0
@@ -798,12 +811,14 @@ def analyze_journey_patterns(heatmap_df):
         active_mask = (worker_data >= 2) & (worker_data <= 12)
         activity_changes = np.sum(np.diff(active_mask.astype(int)) != 0)
         
-        # 🆕 공간별 체류시간 계산 (각 색상별 10분 bin 수 → 분으로 환산)
+        # 🆕 공간별 체류시간 계산 (각 색상별 UnitTime bin 수 → 분으로 환산)
+        # TODO: unit_time_minutes를 context에서 전달받아야 정확함. 현재는 근사치 사용
+        approx_unit_time = 1440 // num_bins_in_data if num_bins_in_data > 0 else 5
         space_dwell_time = {}
         for color_val in range(2, 13):  # 2-12: 활성화 색상만
             bins_in_space = np.sum(worker_data == color_val)
             if bins_in_space > 0:
-                space_dwell_time[color_val] = bins_in_space * 10  # 10분 bin
+                space_dwell_time[color_val] = bins_in_space * approx_unit_time
         
         # 🆕 이동 경로 추출 (색상 전환 시퀀스)
         journey_path = []
@@ -831,7 +846,7 @@ def analyze_journey_patterns(heatmap_df):
             'active_bins': active_bins,
             'inactive_bins': inactive_bins,
             'no_signal_bins': no_signal_bins,
-            'active_ratio': active_bins / 144,
+            'active_ratio': active_bins / num_bins_in_data if num_bins_in_data > 0 else 0,
             'dominant_color': dominant_color,
             'dominant_ratio': dominant_ratio,
             'activity_segments': activity_changes // 2,  # 시작/끝 쌍
@@ -957,7 +972,11 @@ def display_journey_heatmap(heatmap_result, title, show_details=False):
     # =========================================================================
     
     # Time labels (10-min bins: 00:00, 00:10, ... 23:50)
-    time_labels = [f"{i//6:02d}:{(i%6)*10:02d}" for i in range(144)]
+    # Dynamic time labels using global config
+    from config import config as global_config
+    num_bins = heatmap_data.shape[1]
+    time_labels = [global_config.get_time_label_from_bin(i) for i in range(num_bins)]
+    unit_time_minutes = global_config.UNIT_TIME_MINUTES
     
     # Y-axis labels (MAC addresses, shortened)
     y_labels = [f"{mac[:8]}..." if len(str(mac)) > 8 else str(mac) for mac in mac_order]
@@ -1027,7 +1046,8 @@ def display_journey_heatmap(heatmap_result, title, show_details=False):
         active_cells = np.sum(heatmap_data > 1)  # color > 1 = active (not no_signal or inactive)
         st.metric("Active Time Slots", f"{active_cells:,}")
     with col3:
-        coverage = (active_cells / (tward_count * 144) * 100) if tward_count > 0 else 0
+        num_bins_in_heatmap = heatmap_data.shape[1] if len(heatmap_data.shape) > 1 else 288
+        coverage = (active_cells / (tward_count * num_bins_in_heatmap) * 100) if tward_count > 0 else 0
         st.metric("Active Coverage", f"{coverage:.1f}%")
     
     # =========================================================================

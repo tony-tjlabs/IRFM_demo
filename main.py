@@ -705,51 +705,93 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
         return
     
     # =========================================================================
-    # 1. 전체 인원수 추이
+    # 1. 전체 인원수 추이 (UnitTime 기준)
     # =========================================================================
     st.markdown("### 📈 Total Device Count Trend")
     
-    # 0-23시 보장
-    all_hours = pd.DataFrame({'hour': range(24)})
-    hourly_plot = all_hours.merge(hourly_avg[['hour', 'device_count']], on='hour', how='left').fillna(0)
+    # UnitTime 단위 데이터 로드
+    unit_time_data = cache_loader.load_flow_unit_time_unique()
     
-    fig_total = go.Figure()
-    fig_total.add_trace(go.Scatter(
-        x=hourly_plot['hour'],
-        y=hourly_plot['device_count'],
-        mode='lines+markers',
-        name='Total Devices',
-        line=dict(color='#1f77b4', width=3),
-        marker=dict(size=8)
-    ))
-    fig_total.update_layout(
-        title='전체 디바이스 수 (시간별 평균)',
-        xaxis_title='Hour',
-        yaxis_title='Average Device Count',
-        height=350,
-        template='plotly_white',
-        xaxis=dict(
-            tickmode='linear',
-            tick0=0,
-            dtick=1,
-            range=[-0.5, 23.5]
+    if unit_time_data is not None and not unit_time_data.empty:
+        # bin_index와 unique_devices 사용
+        fig_total = go.Figure()
+        fig_total.add_trace(go.Scatter(
+            x=unit_time_data['bin_index'],
+            y=unit_time_data['unique_devices'],
+            mode='lines+markers',
+            name='Total Devices',
+            line=dict(color='#1f77b4', width=3),
+            marker=dict(size=6)
+        ))
+        fig_total.update_layout(
+            title=f'전체 디바이스 수 (UnitTime 단위)',
+            xaxis_title='Time (bin_index)',
+            yaxis_title='Unique Device Count',
+            height=350,
+            template='plotly_white',
+            xaxis=dict(
+                tickmode='linear',
+                tick0=0,
+                dtick=12,  # 1시간마다 tick
+                range=[-1, 288]
+            )
         )
-    )
-    st.plotly_chart(fig_total, use_container_width=True)
+        st.plotly_chart(fig_total, use_container_width=True)
+    else:
+        # Fallback: 시간별 평균
+        all_hours = pd.DataFrame({'hour': range(24)})
+        hourly_plot = all_hours.merge(hourly_avg[['hour', 'device_count']], on='hour', how='left').fillna(0)
+        
+        fig_total = go.Figure()
+        fig_total.add_trace(go.Scatter(
+            x=hourly_plot['hour'],
+            y=hourly_plot['device_count'],
+            mode='lines+markers',
+            name='Total Devices',
+            line=dict(color='#1f77b4', width=3),
+            marker=dict(size=8)
+        ))
+        fig_total.update_layout(
+            title='전체 디바이스 수 (시간별 평균)',
+            xaxis_title='Hour',
+            yaxis_title='Average Device Count',
+            height=350,
+            template='plotly_white',
+            xaxis=dict(
+                tickmode='linear',
+                tick0=0,
+                dtick=1,
+                range=[-0.5, 23.5]
+            )
+        )
+        st.plotly_chart(fig_total, use_container_width=True)
     
     # 통계 메트릭
     col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("📱 Peak", f"{hourly_plot['device_count'].max():.0f}")
-    with col2:
-        st.metric("📊 Average", f"{hourly_plot['device_count'].mean():.1f}")
-    with col3:
-        st.metric("📉 Min", f"{hourly_plot['device_count'].min():.0f}")
-    with col4:
-        if total_unique > 0:
-            st.metric("🔢 Total Unique (Daily)", f"{total_unique:,}")
-        else:
-            st.metric("🔢 Total Unique (Daily)", "N/A")
+    if unit_time_data is not None and not unit_time_data.empty:
+        with col1:
+            st.metric("📱 Peak", f"{unit_time_data['unique_devices'].max():.0f}")
+        with col2:
+            st.metric("📊 Average", f"{unit_time_data['unique_devices'].mean():.1f}")
+        with col3:
+            st.metric("📉 Min", f"{unit_time_data['unique_devices'].min():.0f}")
+        with col4:
+            if total_unique > 0:
+                st.metric("🔢 Total Unique (Daily)", f"{total_unique:,}")
+            else:
+                st.metric("🔢 Total Unique (Daily)", "N/A")
+    else:
+        with col1:
+            st.metric("📱 Peak", f"{hourly_plot['device_count'].max():.0f}")
+        with col2:
+            st.metric("📊 Average", f"{hourly_plot['device_count'].mean():.1f}")
+        with col3:
+            st.metric("📉 Min", f"{hourly_plot['device_count'].min():.0f}")
+        with col4:
+            if total_unique > 0:
+                st.metric("🔢 Total Unique (Daily)", f"{total_unique:,}")
+            else:
+                st.metric("🔢 Total Unique (Daily)", "N/A")
     
     # =========================================================================
     # 2. 빌딩/층별 시간별 추이 (필터 선택)
@@ -810,38 +852,32 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
                     # S-Ward ID 목록 가져오기
                     selected_sward_ids = sward_filtered['sward_id'].unique()
                     
-                    # 전체 시간별 데이터를 사용하되, 선택된 S-Ward의 비율로 계산
+                    # 전체 UnitTime 데이터를 사용하되, 선택된 S-Ward의 비율로 계산
                     # 전체 unique devices * (선택된 S-Ward의 unique_devices 합 / 전체 S-Ward의 unique_devices 합)
                     total_devices_in_selection = sward_filtered['unique_devices'].sum()
                     total_devices_overall = sward_flow['unique_devices'].sum()
                     ratio = total_devices_in_selection / total_devices_overall if total_devices_overall > 0 else 0
                     
-                    # 전체 시간별 데이터 로드
-                    hourly_avg = cache_loader.load_flow_hourly_avg_from_2min()
-                    if hourly_avg is not None and not hourly_avg.empty:
+                    # UnitTime 단위 데이터 로드
+                    unit_time_data = cache_loader.load_flow_unit_time_unique()
+                    if unit_time_data is not None and not unit_time_data.empty:
                         # 비율 적용
-                        hourly_plot = hourly_avg[['hour', 'avg_unique_mac']].copy()
-                        hourly_plot['unique_devices'] = (hourly_plot['avg_unique_mac'] * ratio).round(0)
-                        hourly_plot = hourly_plot[['hour', 'unique_devices']]
-                        
-                        # 0-23시 보장
-                        all_hours = pd.DataFrame({'hour': range(24)})
-                        hourly_plot = all_hours.merge(hourly_plot, on='hour', how='left').fillna(0)
+                        unit_time_plot = unit_time_data[['bin_index', 'unique_devices']].copy()
+                        unit_time_plot['adjusted_devices'] = (unit_time_plot['unique_devices'] * ratio).round(0)
                     else:
-                        st.warning("Hourly average data not available.")
-                        hourly_plot = None
+                        unit_time_plot = None
                     
-                    if hourly_plot is not None:
-                        # 차트
+                    if unit_time_plot is not None:
+                        # 차트 (UnitTime 기준)
                         import plotly.graph_objects as go
                         fig = go.Figure()
                         fig.add_trace(go.Scatter(
-                            x=hourly_plot['hour'],
-                            y=hourly_plot['unique_devices'],
+                            x=unit_time_plot['bin_index'],
+                            y=unit_time_plot['adjusted_devices'],
                             mode='lines+markers',
                             name='Unique Devices',
                             line=dict(color='#2196F3', width=3),
-                            marker=dict(size=8)
+                            marker=dict(size=6)
                         ))
                         
                         title_suffix = ""
@@ -851,8 +887,8 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
                                 title_suffix += f"-{selected_level}"
                         
                         fig.update_layout(
-                            title=f'Hourly Device Count{title_suffix}',
-                            xaxis_title='Hour',
+                            title=f'Device Count (UnitTime){title_suffix}',
+                            xaxis_title='Time (bin_index)',
                             yaxis_title='Unique Devices',
                             height=400,
                             template='plotly_white',
@@ -868,11 +904,11 @@ def _render_device_counting_tab(flow_data, sward_config, cache_loader=None):
                         # 통계 메트릭
                         col1, col2, col3, col4 = st.columns(4)
                         with col1:
-                            st.metric("📱 Peak", f"{hourly_plot['unique_devices'].max():.0f}")
+                            st.metric("📱 Peak", f"{unit_time_plot['adjusted_devices'].max():.0f}")
                         with col2:
-                            st.metric("📊 Average", f"{hourly_plot['unique_devices'].mean():.1f}")
+                            st.metric("📊 Average", f"{unit_time_plot['adjusted_devices'].mean():.1f}")
                         with col3:
-                            st.metric("📉 Min", f"{hourly_plot['unique_devices'].min():.0f}")
+                            st.metric("📉 Min", f"{unit_time_plot['adjusted_devices'].min():.0f}")
                         with col4:
                             st.metric("🔢 Total Unique (Daily)", f"{int(total_devices_in_selection):,}")
                 else:
@@ -1866,8 +1902,12 @@ def render_t31_operation_heatmap():
         fill_value=0
     )
     
-    # Ensure all 144 bins exist
-    for i in range(144):
+    # Determine expected bins from data (288 for 5-min, 144 for 10-min)
+    max_bin = int(raw_heatmap['bin_index'].max()) if not raw_heatmap.empty else 287
+    expected_bins = max_bin + 1  # 0-indexed, so +1
+    
+    # Ensure all bins exist (dynamic based on data)
+    for i in range(expected_bins):
         if i not in heatmap_matrix.columns:
             heatmap_matrix[i] = 0
             
@@ -1962,9 +2002,15 @@ def _display_t31_heatmap_from_cache(heatmap_data):
             [7/7, COLOR_HEX_MAP[7]],  # 7: Cluster - Purple
         ]
         
+        # Dynamic time labels using global config
+        from config import config as global_config
+        num_bins = z_data.shape[1]
+        x_labels = [global_config.get_time_label_from_bin(i) for i in range(num_bins)]
+        unit_time_minutes = global_config.UNIT_TIME_MINUTES
+        
         fig = go.Figure(data=go.Heatmap(
             z=z_data,
-            x=[f"{i//6:02d}:{(i%6)*10:02d}" for i in range(144)],
+            x=x_labels,
             y=y_labels,
             colorscale=colorscale,
             zmin=0,
@@ -1976,7 +2022,7 @@ def _display_t31_heatmap_from_cache(heatmap_data):
             )
         ))
         fig.update_layout(
-            title='T31 Equipment Operation Heatmap (10-min intervals) - Building-Level Colors',
+            title=f'T31 Equipment Operation Heatmap ({unit_time_minutes}-min intervals) - Building-Level Colors',
             xaxis_title='Time',
             yaxis_title='Equipment (Building-Level)',
             height=max(400, len(heatmap_data) * 20)
